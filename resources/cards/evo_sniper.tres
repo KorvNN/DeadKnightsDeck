@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="UpgradeCard" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/upgrade_card.gd" id="1"]
+[ext_resource type="Resource" path="res://resources/weapons/sniper.tres" id="2"]
+
+[resource]
+script = ExtResource("1")
+id = "evo_sniper"
+title = "KESKİN NİŞANCI"
+description = "Silahını keskin nişancı tüfeğine çevir: tek kurşunda yıkıcı hasar, yüksek kafa çarpanı.
+
+(Kritik Vuruş dalının evrimi)"
+rarity = 3
+max_stacks = 1
+requires = {"crit": 2}
+new_weapon = ExtResource("2")

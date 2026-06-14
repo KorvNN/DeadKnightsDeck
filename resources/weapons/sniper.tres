@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/weapons/SniperRifle.fbx" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/shotgun_fire.wav" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/rifle_reload.wav" id="4"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Keskin Nişancı"
+damage = 48.0
+fire_rate = 1.0
+mag_size = 5
+reserve_ammo = 40
+auto = false
+reload_time = 2.2
+headshot_mult = 3.5
+crit_chance = 0.15
+crit_mult = 2.5
+pellets = 1
+spread_deg = 0.0
+model_scene = ExtResource("2")
+view_scale = 0.096
+view_rot_deg = Vector3(0, 0, 0)
+view_pos = Vector3(0.15, -0.17, -0.1)
+fire_sound = ExtResource("3")
+fire_volume_db = -13.0
+reload_sound = ExtResource("4")

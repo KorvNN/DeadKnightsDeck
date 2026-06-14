@@ -4,6 +4,8 @@ extends Node
 
 const MENU := preload("res://assets/audio/music/menu_music.wav")
 const GAME := preload("res://assets/audio/music/game_music.wav")
+const EXPLORE := preload("res://assets/audio/music/explore_music.wav")
+const CERBERUS := preload("res://assets/audio/music/cerberus_music.wav")
 const CLICK := preload("res://assets/audio/sfx/ui_click.wav")
 const TRANSITION := preload("res://assets/audio/sfx/stage_advance.wav")
 
@@ -23,11 +25,17 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_loopify(MENU)
 	_loopify(GAME)
+	_loopify(EXPLORE)
+	_loopify(CERBERUS)
 	_a = _make_player()
 	_b = _make_player()
 	_ui = _make_player()
 	_ui.volume_db = 0.0
 	_cur = _a
+	# müzik ayrı bus'ta: ayarlardan bağımsız kısılabilsin (SettingsMenu bus'ı kurar)
+	SettingsMenu.load_settings()
+	_a.bus = "Music"
+	_b.bus = "Music"
 
 
 func _make_player() -> AudioStreamPlayer:
@@ -64,6 +72,24 @@ func play_menu() -> void:
 
 func play_game() -> void:
 	_crossfade(GAME, "game", GAME_DB)
+
+
+func play_explore() -> void:
+	_crossfade(EXPLORE, "explore", GAME_DB + 2.0)
+
+
+func play_cerberus() -> void:
+	_crossfade(CERBERUS, "cerberus", GAME_DB + 1.0)
+
+
+func fade_out() -> void:
+	## foreshadow: müziği sessizliğe indir (geçici)
+	_which = ""
+	if _fade_tween:
+		_fade_tween.kill()
+	_fade_tween = create_tween()
+	_fade_tween.tween_property(_cur, "volume_db", -40.0, 1.2)
+	_fade_tween.tween_callback(_cur.stop)
 
 
 func _crossfade(stream: AudioStream, which: String, vol: float) -> void:

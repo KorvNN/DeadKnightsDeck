@@ -144,8 +144,20 @@ static func generate(w: int, h: int, rng_seed: int, braid := 0.12) -> Dictionary
 				if not room_cells.has(n) and (far_corridor.x < 0 or dist[n] > dist[far_corridor]):
 					far_corridor = n
 				queue.append(n)
-	# çıkış: mümkünse koridor hücresi (halkanın altı temiz kalsın)
-	if far_corridor.x >= 0:
+	# çıkış: mümkünse koridor hücresi (halkanın altı temiz kalsın).
+	# Yol uzaklığı tek başına yetmez — kıvrımlı labirentte en uzak koridor
+	# spawn'ın fiziksel komşusu çıkabiliyor; portal ışığı/etiketi daha ilk
+	# adımda görünür. Spawn'a manhattan olarak yakın hücreleri ele.
+	var min_geo := (w + h) / 4
+	var far_geo := Vector2i(-1, -1)
+	for c4: Vector2i in dist:
+		if room_cells.has(c4) or c4.x + c4.y < min_geo:
+			continue
+		if far_geo.x < 0 or dist[c4] > dist[far_geo]:
+			far_geo = c4
+	if far_geo.x >= 0:
+		far = far_geo
+	elif far_corridor.x >= 0:
 		far = far_corridor
 
 	# --- 6) ulaşılabilir koridor çıkmazları (sandık adayları) ---

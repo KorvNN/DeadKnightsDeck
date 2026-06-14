@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/weapons/Revolver.fbx" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/pistol_fire.wav" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/pistol_reload.wav" id="4"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Toplu Tabanca"
+damage = 24.0
+fire_rate = 2.8
+mag_size = 6
+reserve_ammo = 60
+auto = false
+reload_time = 1.5
+headshot_mult = 2.8
+pellets = 1
+spread_deg = 0.0
+model_scene = ExtResource("2")
+view_scale = 0.072
+view_rot_deg = Vector3(0, 0, 0)
+view_pos = Vector3(0.12, -0.15, -0.1)
+fire_sound = ExtResource("3")
+fire_volume_db = -6.0
+reload_sound = ExtResource("4")

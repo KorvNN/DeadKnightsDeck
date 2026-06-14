@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="UpgradeCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/upgrade_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "incendiary"
+title = "Yakıcı Bomba"
+description = "Bombaların artık molotof: patlama sonrası birkaç saniye yanan bir alan bırakır, içindeki düşmanları kavurur."
+rarity = 3
+max_stacks = 1
+requires = {"extra_nade": 1}
+player_add = {"molotov_level": 1}

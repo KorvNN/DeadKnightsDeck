@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="UpgradeCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/upgrade_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "extra_nade"
+title = "Cephane Çantası"
+description = "Taşınabilir bomba kapasitesi +1. Bombalar zamanla kendiliğinden dolar. (G ile at)"
+rarity = 1
+max_stacks = 3
+requires = {"grenade_unlock": 1}
+player_add = {"max_grenades": 1}

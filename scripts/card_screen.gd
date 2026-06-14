@@ -33,6 +33,25 @@ func _ready() -> void:
 	_build_ui()
 	Game.leveled_up.connect(_on_leveled_up)
 	Game.bonus_draw.connect(_on_bonus_draw)
+	# kat geçişi sahneyi yeniden yüklüyor → önceki kartları sırayla yeniden uygula
+	call_deferred("_reapply_run_state")
+
+
+func _reapply_run_state() -> void:
+	## fresh player/weapon üzerine biriken yükseltmeleri geri kur, taşınan canı uygula
+	if Game.picked_order.is_empty() and Game.carry_health < 0.0:
+		return
+	var by_id := {}
+	for c: UpgradeCard in pool:
+		by_id[c.id] = c
+	for id: String in Game.picked_order:
+		if by_id.has(id):
+			(by_id[id] as UpgradeCard).apply(player, weapon)
+	weapon.refresh_stats()
+	player.refresh_stats()
+	if Game.carry_health >= 0.0:
+		player.health = minf(Game.carry_health, player.max_health)
+		player.health_changed.emit(player.health, player.max_health)
 
 
 func _load_pool() -> void:
@@ -117,6 +136,7 @@ func _pick(card: UpgradeCard) -> void:
 	var prev_max_hp: float = player.max_health
 	card.apply(player, weapon)
 	Game.picked_cards[card.id] = Game.card_count(card.id) + 1
+	Game.picked_order.append(card.id)
 	# max can arttıysa farkı aynen iyileştir
 	if player.max_health > prev_max_hp:
 		player.heal(player.max_health - prev_max_hp)
@@ -168,7 +188,7 @@ func _build_ui() -> void:
 
 func _make_card(card: UpgradeCard) -> Button:
 	var btn := Button.new()
-	btn.custom_minimum_size = Vector2(230, 310)
+	btn.custom_minimum_size = Vector2(290, 400)
 	btn.focus_mode = Control.FOCUS_NONE
 
 	var color := RARITY_COLORS[card.rarity]
@@ -187,27 +207,38 @@ func _make_card(card: UpgradeCard) -> Button:
 
 	var vbox := VBoxContainer.new()
 	vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	vbox.offset_left = 14
-	vbox.offset_right = -14
-	vbox.offset_top = 18
-	vbox.offset_bottom = -18
-	vbox.add_theme_constant_override("separation", 12)
+	vbox.offset_left = 18
+	vbox.offset_right = -18
+	vbox.offset_top = 22
+	vbox.offset_bottom = -22
+	vbox.add_theme_constant_override("separation", 14)
 	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(vbox)
 
 	var rarity_label := Label.new()
 	rarity_label.text = RARITY_NAMES[card.rarity]
 	rarity_label.add_theme_font_override("font", _font)
-	rarity_label.add_theme_font_size_override("font_size", 15)
+	rarity_label.add_theme_font_size_override("font_size", 17)
 	rarity_label.add_theme_color_override("font_color", color)
 	rarity_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rarity_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(rarity_label)
 
+	var icon_tex := card.icon()
+	if icon_tex != null:
+		var icon_rect := TextureRect.new()
+		icon_rect.texture = icon_tex
+		icon_rect.custom_minimum_size = Vector2(0, 68)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.modulate = color
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		vbox.add_child(icon_rect)
+
 	var title_label := Label.new()
 	title_label.text = card.title
 	title_label.add_theme_font_override("font", _font)
-	title_label.add_theme_font_size_override("font_size", 26)
+	title_label.add_theme_font_size_override("font_size", 30)
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -222,7 +253,7 @@ func _make_card(card: UpgradeCard) -> Button:
 	var stacks := Game.card_count(card.id)
 	if stacks > 0:
 		desc_label.text += "\n\n(Sahip: %d/%d)" % [stacks, card.max_stacks]
-	desc_label.add_theme_font_size_override("font_size", 16)
+	desc_label.add_theme_font_size_override("font_size", 18)
 	desc_label.add_theme_color_override("font_color", Color(0.8, 0.82, 0.85))
 	desc_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

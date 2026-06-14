@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="UpgradeCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/upgrade_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "demolition"
+title = "Yıkım"
+description = "Bomba hasarı +%40, patlama yarıçapı +%20."
+rarity = 2
+max_stacks = 2
+requires = {"grenade_unlock": 1}
+player_mul = {"grenade_damage": 1.4, "grenade_radius": 1.2}

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
+[ext_resource type="PackedScene" path="res://assets/weapons/P90.fbx" id="2"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/rifle_fire.wav" id="3"]
+[ext_resource type="AudioStream" path="res://assets/audio/weapons/rifle_reload.wav" id="4"]
+
+[resource]
+script = ExtResource("1")
+display_name = "P90"
+damage = 5.0
+fire_rate = 14.0
+mag_size = 50
+reserve_ammo = 300
+auto = true
+reload_time = 2.0
+headshot_mult = 2.0
+pellets = 1
+spread_deg = 2.8
+model_scene = ExtResource("2")
+view_scale = 0.085
+view_rot_deg = Vector3(0, 0, 0)
+view_pos = Vector3(0.15, -0.17, -0.1)
+fire_sound = ExtResource("3")
+fire_volume_db = -16.0
+reload_sound = ExtResource("4")

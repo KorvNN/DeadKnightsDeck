@@ -22,6 +22,14 @@ extends Resource
 @export var new_weapon: WeaponData  ## doluysa bu kart silahı değiştirir
 
 
+func icon() -> Texture2D:
+	## kart ikonu: assets/ui/cards/<id>.png (beyaz siluet, UI rarity rengine boyar)
+	var path := "res://assets/ui/cards/%s.png" % id
+	if ResourceLoader.exists(path):
+		return load(path)
+	return null
+
+
 func is_available() -> bool:
 	if Game.card_count(id) >= max_stacks:
 		return false

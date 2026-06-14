@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/weapon.gd" id="2"]
@@ -8,7 +8,6 @@
 [ext_resource type="PackedScene" path="res://assets/weapons/Pistol.fbx" id="6"]
 [ext_resource type="FontFile" path="res://assets/fonts/Kenney Future Narrow.ttf" id="7"]
 [ext_resource type="Texture2D" path="res://assets/crosshairs/crosshair007.png" id="8"]
-[ext_resource type="Texture2D" path="res://assets/crosshairs/crosshair035.png" id="9"]
 [ext_resource type="AudioStream" path="res://assets/audio/weapons/pistol_fire.wav" id="10"]
 [ext_resource type="AudioStream" path="res://assets/audio/impact/impactPunch_medium_000.ogg" id="11"]
 [ext_resource type="AudioStream" path="res://assets/audio/impact/impactSoft_heavy_000.ogg" id="12"]
@@ -17,6 +16,9 @@
 [ext_resource type="Texture2D" path="res://assets/particles/muzzle_01.png" id="15"]
 [ext_resource type="AudioStream" path="res://assets/audio/impact/impactMetal_light_000.ogg" id="16"]
 [ext_resource type="AudioStream" path="res://assets/audio/weapons/dryfire.wav" id="17"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/icon_heart.png" id="18"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/icon_shield.png" id="19"]
+[ext_resource type="Texture2D" path="res://assets/ui/hud/icon_bolt.png" id="20"]
 
 [sub_resource type="StandardMaterial3D" id="flash_mat"]
 transparency = 1
@@ -54,6 +56,20 @@ corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="shield_fill"]
+bg_color = Color(0.72, 0.74, 0.78, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="stam_fill"]
+bg_color = Color(0.3, 0.85, 0.95, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
 [node name="Player" type="CharacterBody3D" groups=["player"]]
 script = ExtResource("1")
@@ -134,22 +150,6 @@ mouse_filter = 2
 texture = ExtResource("8")
 stretch_mode = 5
 
-[node name="Hitmarker" type="TextureRect" parent="HUD"]
-modulate = Color(1, 0.4, 0.3, 0)
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -16.0
-offset_top = -16.0
-offset_right = 16.0
-offset_bottom = 16.0
-pivot_offset = Vector2(16, 16)
-mouse_filter = 2
-texture = ExtResource("9")
-stretch_mode = 5
-
 [node name="HurtVignette" type="ColorRect" parent="HUD"]
 modulate = Color(1, 1, 1, 0)
 anchors_preset = 15
@@ -174,6 +174,24 @@ text = "12 / 48"
 horizontal_alignment = 2
 vertical_alignment = 1
 
+[node name="PassiveWeaponLabel" type="Label" parent="HUD"]
+visible = false
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -260.0
+offset_top = -126.0
+offset_right = -24.0
+offset_bottom = -100.0
+theme_override_colors/font_color = Color(0.5, 0.52, 0.56, 1)
+theme_override_fonts/font = ExtResource("7")
+theme_override_font_sizes/font_size = 17
+text = "Q • Tabanca"
+horizontal_alignment = 2
+vertical_alignment = 1
+
 [node name="WeaponLabel" type="Label" parent="HUD"]
 anchors_preset = 3
 anchor_left = 1.0
@@ -195,9 +213,9 @@ vertical_alignment = 1
 anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
-offset_left = 24.0
+offset_left = 52.0
 offset_top = -52.0
-offset_right = 304.0
+offset_right = 332.0
 offset_bottom = -28.0
 theme_override_styles/background = SubResource("bar_bg")
 theme_override_styles/fill = SubResource("hp_fill")
@@ -205,12 +223,100 @@ max_value = 100.0
 value = 100.0
 show_percentage = false
 
+[node name="HealthIcon" type="TextureRect" parent="HUD/HealthBar"]
+modulate = Color(1, 0.4, 0.36, 1)
+offset_left = -28.0
+offset_top = 2.0
+offset_right = -8.0
+offset_bottom = 22.0
+mouse_filter = 2
+texture = ExtResource("18")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="HealthValue" type="Label" parent="HUD/HealthBar"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("7")
+theme_override_font_sizes/font_size = 15
+text = "100 / 100"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="ShieldBar" type="ProgressBar" parent="HUD"]
+visible = false
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 52.0
+offset_top = -74.0
+offset_right = 332.0
+offset_bottom = -58.0
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("shield_fill")
+max_value = 100.0
+value = 0.0
+show_percentage = false
+
+[node name="ShieldIcon" type="TextureRect" parent="HUD/ShieldBar"]
+modulate = Color(0.85, 0.87, 0.92, 1)
+offset_left = -26.0
+offset_top = -1.0
+offset_right = -8.0
+offset_bottom = 17.0
+mouse_filter = 2
+texture = ExtResource("19")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ShieldValue" type="Label" parent="HUD/ShieldBar"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 0.75)
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("7")
+theme_override_font_sizes/font_size = 11
+text = "0 / 0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="StaminaBar" type="ProgressBar" parent="HUD"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 52.0
+offset_top = -24.0
+offset_right = 332.0
+offset_bottom = -16.0
+theme_override_styles/background = SubResource("bar_bg")
+theme_override_styles/fill = SubResource("stam_fill")
+max_value = 100.0
+value = 100.0
+show_percentage = false
+
+[node name="StaminaIcon" type="TextureRect" parent="HUD/StaminaBar"]
+modulate = Color(0.45, 0.9, 1, 1)
+offset_left = -26.0
+offset_top = -5.0
+offset_right = -8.0
+offset_bottom = 13.0
+mouse_filter = 2
+texture = ExtResource("20")
+expand_mode = 1
+stretch_mode = 5
+
 [node name="XPBar" type="ProgressBar" parent="HUD"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 240.0
+offset_left = 480.0
 offset_top = 16.0
-offset_right = -240.0
+offset_right = -480.0
 offset_bottom = 28.0
 theme_override_styles/background = SubResource("bar_bg")
 theme_override_styles/fill = SubResource("xp_fill")

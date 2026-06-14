@@ -11,6 +11,13 @@ extends Resource
 @export var auto := false  ## true: basılı tutunca atar
 @export var reload_time := 1.2
 @export var headshot_mult := 2.5  ## kafaya isabette hasar çarpanı
+@export var crit_chance := 0.0  ## kritik vuruş şansı (0..1, kartlarla artar)
+@export var crit_mult := 2.0    ## kritik vuruş hasar çarpanı
+
+@export_group("Özel Mermi (kartlar)")
+@export var pierce := 0       ## mermi kaç ek düşmanı delip geçer
+@export var burn_dps := 0.0   ## yakıcı mermi: vurulan düşmana saniyelik ateş hasarı
+@export var chill := 0.0      ## dondurucu mermi: hız azaltma oranı (0..0.8)
 
 @export_group("Saçılma")
 @export var pellets := 1  ## tek atışta çıkan saçma sayısı (shotgun)

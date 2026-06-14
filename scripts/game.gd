@@ -15,11 +15,61 @@ var level := 1
 var xp := 0
 var kills := 0
 var picked_cards := {}  ## kart id -> kaç kez seçildi
+var picked_order: Array[String] = []  ## seçim sırası — kat geçişinde sırayla yeniden uygulanır
+var carry_health := -1.0  ## kat geçişinde taşınan can (<0: tam dolu başla)
 var stage := 1  ## global ilerleme sayacı (tüm bölümler boyunca artar)
 var run_seed := 0  ## bu oyunun labirent tohumu
 var gold := 0
 var intro_shown := false  ## açılış hikâye ekranı (koşu başına bir kez)
 var castle_intro_shown := false  ## şatoya giriş hikâye ekranı
+var afterlife := ""  ## Cerberus sonrası seçim: "heaven" (bulutlar) / "hell" (lav)
+var won := false  ## koşu zaferle bitti mi (koşu-özeti ekranı bunu okur)
+var debug_stage := 0  ## geliştirme kısayolu: --stage=N ile koşu o kattan başlar (play2.bat)
+
+var run_time := 0.0       ## bu koşunun aktif (duraklatma hariç) oyun süresi — speedrun
+var _run_active := false
+const LB_PATH := "user://leaderboard.cfg"
+
+
+func _ready() -> void:
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--stage="):
+			debug_stage = maxi(arg.get_slice("=", 1).to_int(), 0)
+
+
+func _process(delta: float) -> void:
+	if _run_active:
+		run_time += delta  # duraklatmada (kart/ESC) autoload da durur → süre saymaz
+
+
+func start_timer() -> void:
+	_run_active = true
+
+
+func end_run() -> Array:
+	## koşuyu bitir, leaderboard'a kaydet, sıralı listeyi döndür
+	_run_active = false
+	var cfg := ConfigFile.new()
+	cfg.load(LB_PATH)
+	var runs: Array = cfg.get_value("board", "runs", [])
+	runs.append({
+		"stage": stage, "kills": kills, "level": level, "gold": gold,
+		"time": run_time, "date": Time.get_date_string_from_system(),
+	})
+	runs.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if a["stage"] != b["stage"]:
+			return a["stage"] > b["stage"]  # daha ileri kat üstte
+		return a["time"] < b["time"])       # eşit katta daha hızlı üstte
+	runs = runs.slice(0, 10)
+	cfg.set_value("board", "runs", runs)
+	cfg.save(LB_PATH)
+	return runs
+
+
+func leaderboard() -> Array:
+	var cfg := ConfigFile.new()
+	cfg.load(LB_PATH)
+	return cfg.get_value("board", "runs", [])
 
 
 func biome() -> String:
@@ -29,6 +79,10 @@ func biome() -> String:
 		return "garden_boss"
 	if stage == GARDEN_STAGES + CASTLE_STAGES + 2:  # kat 12: taht salonu
 		return "castle_boss"
+	if stage == GARDEN_STAGES + CASTLE_STAGES + 3:  # kat 13: balkon — Cerberus
+		return "cerberus"
+	if stage == GARDEN_STAGES + CASTLE_STAGES + 4:  # kat 14: cennet/cehennem
+		return afterlife if afterlife != "" else "heaven"
 	return "castle"
 
 
@@ -40,8 +94,8 @@ func biome_stage() -> int:
 		return 1
 	if stage <= GARDEN_STAGES + CASTLE_STAGES + 1:
 		return stage - GARDEN_STAGES - 1
-	if stage == GARDEN_STAGES + CASTLE_STAGES + 2:
-		return 1
+	if stage >= GARDEN_STAGES + CASTLE_STAGES + 2:
+		return 1  # taht salonu / Cerberus / cennet-cehennem
 	return stage - GARDEN_STAGES - 2  # boss sonrası şato derinleri (kat 6+)
 
 
@@ -63,7 +117,8 @@ func spend_gold(amount: int) -> bool:
 
 
 func xp_needed() -> int:
-	return 40 + (level - 1) * 30
+	# daha dik eğri: ilk bölümde 1-2 kartı geçmeyecek şekilde yavaş ilerleme
+	return 60 + (level - 1) * 50
 
 
 func add_kill() -> void:
@@ -90,8 +145,14 @@ func reset() -> void:
 	xp = 0
 	kills = 0
 	picked_cards.clear()
-	stage = 1
+	picked_order.clear()
+	carry_health = -1.0
+	stage = maxi(debug_stage, 1)
 	run_seed = randi()
 	gold = 0
 	intro_shown = false
 	castle_intro_shown = false
+	afterlife = ""
+	won = false
+	run_time = 0.0
+	_run_active = false  # oyun (dungeon) yüklenince start_timer ile başlar

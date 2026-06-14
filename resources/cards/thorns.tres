@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="UpgradeCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/upgrade_card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thorns"
+title = "Diken Zırh"
+description = "Sana vuran zombi 8 hasar yer"
+rarity = 1
+max_stacks = 3
+player_add = {"thorns": 8.0}

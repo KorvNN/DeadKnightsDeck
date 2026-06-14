@@ -8,7 +8,7 @@ id = "heavy_barrel"
 title = "Ağır Namlu"
 description = "Hasar +%50, atış hızı -%20.
 
-Aldığında POMPALI evrim kartı havuza girer."
+1 adet: POMPALI açılır. 2 adet: TOPLU TABANCA da açılır."
 rarity = 1
 max_stacks = 2
 weapon_mul = {"damage": 1.5, "fire_rate": 0.8}

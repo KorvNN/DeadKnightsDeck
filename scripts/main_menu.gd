@@ -75,6 +75,7 @@ func _build() -> void:
 	menu.add_theme_constant_override("separation", 16)
 	add_child(menu)
 	menu.add_child(MenuUI.make_button("BAŞLA", _on_start))
+	menu.add_child(MenuUI.make_button("İSTATİSTİKLER", _on_stats))
 	menu.add_child(MenuUI.make_button("AYARLAR", _on_settings))
 	menu.add_child(MenuUI.make_button("ÇIKIŞ", _on_quit))
 
@@ -367,6 +368,92 @@ func _on_start() -> void:
 func _on_settings() -> void:
 	var settings: CanvasLayer = SettingsMenuScript.new()
 	add_child(settings)
+
+
+func _on_stats() -> void:
+	var runs := Game.leaderboard()
+	var font: Font = load("res://assets/fonts/ui_font.tres")
+	var green := Color(0.45, 0.85, 0.4)
+
+	var overlay := Control.new()
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(overlay)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.04, 0.06, 0.88)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.1, 0.12, 0.98)
+	sb.border_color = green
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(10)
+	sb.set_content_margin_all(34)
+	panel.add_theme_stylebox_override("panel", sb)
+	overlay.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 16)
+	col.custom_minimum_size = Vector2(560, 0)
+	panel.add_child(col)
+
+	var _lbl := func(t: String, s: int, c: Color) -> Label:
+		var l := Label.new()
+		l.text = t
+		l.add_theme_font_override("font", font)
+		l.add_theme_font_size_override("font_size", s)
+		l.add_theme_color_override("font_color", c)
+		return l
+
+	var title: Label = _lbl.call("İSTATİSTİKLER", 40, green)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	col.add_child(title)
+
+	if runs.is_empty():
+		col.add_child(_lbl.call("Henüz tamamlanmış koşu yok.\nBir koşuya başla, ölünce buraya işlenir.", 20, Color(0.7, 0.72, 0.76)))
+	else:
+		# --- özet ---
+		var best: Dictionary = runs[0]  # stage↓ time↑ sıralı
+		var total_kills := 0
+		for r: Dictionary in runs:
+			total_kills += int(r.get("kills", 0))
+		var bt: float = best.get("time", 0.0)
+		col.add_child(_lbl.call("ÖZET", 24, Color(0.85, 0.8, 0.4)))
+		var grid := GridContainer.new()
+		grid.columns = 2
+		grid.add_theme_constant_override("h_separation", 30)
+		grid.add_theme_constant_override("v_separation", 6)
+		col.add_child(grid)
+		var rows := [
+			["En İyi İlerleme", "Kat %d" % int(best.get("stage", 1))],
+			["En İyi Süre (o kat)", "%02d:%02d" % [int(bt) / 60, int(bt) % 60]],
+			["Tamamlanan Koşu", str(runs.size())],
+			["Toplam Öldürme", str(total_kills)],
+		]
+		for rw: Array in rows:
+			grid.add_child(_lbl.call(rw[0], 19, Color(0.72, 0.74, 0.78)))
+			var v: Label = _lbl.call(rw[1], 19, Color(0.95, 0.95, 0.98))
+			v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			grid.add_child(v)
+
+		# --- sıralama ---
+		col.add_child(_lbl.call("SIRALAMA (SPEEDRUN)", 22, Color(0.85, 0.8, 0.4)))
+		for i in mini(runs.size(), 8):
+			var rn: Dictionary = runs[i]
+			var t: float = rn.get("time", 0.0)
+			var line := "%d.  Kat %d   %02d:%02d   %d kill   %s" % [
+				i + 1, int(rn.get("stage", 1)), int(t) / 60, int(t) % 60,
+				int(rn.get("kills", 0)), str(rn.get("date", ""))]
+			col.add_child(_lbl.call(line, 16, Color(0.82, 0.84, 0.88) if i > 0 else green))
+
+	var close := MenuUI.make_button("KAPAT", overlay.queue_free)
+	close.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	col.add_child(close)
 
 
 func _on_quit() -> void:
