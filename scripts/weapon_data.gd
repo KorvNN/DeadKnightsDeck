@@ -24,6 +24,7 @@ extends Resource
 @export var spread_deg := 0.0  ## saçılma açısı (derece)
 
 @export_group("Görsel / Ses")
+@export var icon: Texture2D  ## HUD silah listesi ikonu
 @export var model_scene: PackedScene  ## silah modeli (FBX/glb sahnesi)
 @export var view_scale := 0.07          ## modelin görüş açısı ölçeği
 @export var view_rot_deg := Vector3(0, -90, 0)  ## modelin dönüşü (derece)

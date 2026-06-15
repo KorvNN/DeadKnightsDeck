@@ -48,6 +48,7 @@ func _reapply_run_state() -> void:
 		if by_id.has(id):
 			(by_id[id] as UpgradeCard).apply(player, weapon)
 	weapon.refresh_stats()
+	weapon.import_ammo(Game.carry_ammo)  # kat geçişinden taşınan mermiyi geri yükle
 	player.refresh_stats()
 	if Game.carry_health >= 0.0:
 		player.health = minf(Game.carry_health, player.max_health)

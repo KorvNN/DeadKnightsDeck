@@ -213,7 +213,60 @@ func _give_loot() -> void:
 		_prompt.text = "+80 MERMİ"
 		_prompt.modulate = Color(0.95, 0.9, 0.4)
 		var weapon := _player.get_node("%Gun")
-		weapon.reserve += 80
-		weapon.refresh_stats()
+		if weapon.has_secondary():
+			_choose_weapon_ammo(weapon, 80)  # iki silah var → hangisine?
+		else:
+			weapon.add_reserve(weapon.active_slot, 80)
+			weapon.refresh_stats()
 	await get_tree().create_timer(2.0).timeout
 	_prompt.visible = false
+
+
+func _choose_weapon_ammo(weapon: Node, amount: int) -> void:
+	## iki silah varken yedek mermiyi hangisine ekleyeceğini seçtiren küçük pencere
+	var font: Font = load("res://assets/fonts/ui_font.tres")
+	var layer := CanvasLayer.new()
+	layer.layer = 20
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(layer)
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.03, 0.05, 0.8)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(dim)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_preset(Control.PRESET_CENTER)
+	vbox.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	vbox.grow_vertical = Control.GROW_DIRECTION_BOTH
+	vbox.add_theme_constant_override("separation", 18)
+	layer.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "+%d MERMİ — HANGİ SİLAHA?" % amount
+	title.add_theme_font_override("font", font)
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", Color(0.95, 0.9, 0.4))
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	for slot in [weapon.active_slot, 1 - weapon.active_slot]:
+		var nm: String = weapon.slot_name(slot)
+		if nm == "":
+			continue
+		var rsv: int = weapon.reserve if slot == weapon.active_slot \
+				else weapon.inactive_slot_ammo().y
+		var btn := Button.new()
+		btn.text = "%s   (yedek: %d → %d)" % [nm, rsv, rsv + amount]
+		btn.add_theme_font_override("font", font)
+		btn.add_theme_font_size_override("font_size", 26)
+		btn.custom_minimum_size = Vector2(420, 56)
+		btn.pressed.connect(func() -> void:
+			weapon.add_reserve(slot, amount)
+			weapon.refresh_stats()
+			get_tree().paused = false
+			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			layer.queue_free())
+		vbox.add_child(btn)

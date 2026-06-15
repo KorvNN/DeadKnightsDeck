@@ -39,6 +39,14 @@ const SND_HURT := [
 	preload("res://assets/audio/zombie/zombie_hurt_1.wav"),
 ]
 const SND_DEATH := preload("res://assets/audio/zombie/zombie_death.wav")
+# iskelet sesleri: kemik takırtısı (model yolu "skeleton" içeren TÜM düşmanlar kullanır)
+const SKEL_GROAN := [preload("res://assets/audio/zombie/skel_groan_0.wav"),
+		preload("res://assets/audio/zombie/skel_groan_1.wav")]
+const SKEL_ATTACK := [preload("res://assets/audio/zombie/skel_attack_0.wav"),
+		preload("res://assets/audio/zombie/skel_attack_1.wav")]
+const SKEL_HURT := [preload("res://assets/audio/zombie/skel_hurt_0.wav"),
+		preload("res://assets/audio/zombie/skel_hurt_1.wav")]
+const SKEL_DEATH := preload("res://assets/audio/zombie/skel_death.wav")
 const PICKUP := preload("res://scripts/pickup.gd")
 
 @export var max_health := 30.0
@@ -53,6 +61,12 @@ const PICKUP := preload("res://scripts/pickup.gd")
 @export var base_scale := 0.6  ## modelin "normal insan boyu" ölçeği (zombi 0.6, iskelet 0.85)
 @export var is_boss := false
 @export var skip_rise := false  ## true: topraktan çıkış yok (Cerberus gibi dramatik girişler)
+
+## boss'a özel dövüş sesi seti (varsayılan: zombi). İskelet bossu kemik takırtısı kullanır.
+var voice_groan: Array = SND_GROAN
+var voice_attack: Array = SND_ATTACK
+var voice_hurt: Array = SND_HURT
+var voice_death: AudioStream = SND_DEATH
 
 ## --- varyant sistemi (enemy_variants.gd doldurur) ---
 @export var variant := "walker"
@@ -81,6 +95,9 @@ var _anim := {}  ## mantıksal ad -> bu modeldeki gerçek anim adı
 var player: Node3D
 var _attack_timer := 0.0
 var _hit_flash_timer := 0.0
+var _hurt_cd := 0.0      ## hurt sesi tekrar aralığı (ses spam'ini önler)
+var _react_cd := 0.0     ## irkilme animasyonu tekrar aralığı (titremeyi önler)
+var _knockback := Vector3.ZERO  ## vuruşta geri itilme (sönümlenir)
 var _voice: AudioStreamPlayer3D
 var _groan_timer := 0.0
 var _vocal := false  ## sadece bazı zombiler ara ara homurdanır
@@ -126,6 +143,12 @@ func _ready() -> void:
 
 	if model_path == "":
 		_apply_zombie_skin(model)  # yeşil tonlama sadece zombilere
+	elif path.to_lower().contains("skeleton"):
+		# iskelet (kale düşmanı, minion, boss): zombi iniltisi yerine kemik takırtısı
+		voice_groan = SKEL_GROAN
+		voice_attack = SKEL_ATTACK
+		voice_hurt = SKEL_HURT
+		voice_death = SKEL_DEATH
 
 	_voice = AudioStreamPlayer3D.new()
 	_voice.unit_size = 3.5
@@ -178,6 +201,9 @@ func _physics_process(delta: float) -> void:
 		velocity += get_gravity() * delta
 
 	_attack_timer = maxf(_attack_timer - delta, 0.0)
+	_hurt_cd = maxf(_hurt_cd - delta, 0.0)
+	_react_cd = maxf(_react_cd - delta, 0.0)
+	_knockback = _knockback.move_toward(Vector3.ZERO, delta * 14.0)
 
 	# yakıcı/dondurucu mermi durumları
 	if _burn_time > 0.0 or _chill_time > 0.0:
@@ -200,7 +226,7 @@ func _physics_process(delta: float) -> void:
 		_groan_timer -= delta
 		if _groan_timer <= 0.0:
 			_groan_timer = randf_range(9.0, 20.0)
-			_say(SND_GROAN, 0.82, 1.18)
+			_say(voice_groan, 0.82, 1.18)
 
 	if state == State.SPAWNING:
 		velocity.x = 0.0
@@ -237,6 +263,8 @@ func _physics_process(delta: float) -> void:
 		if anim.current_animation != _anim["Run"]:
 			anim.play(_anim["Run"])
 
+	velocity.x += _knockback.x
+	velocity.z += _knockback.z
 	move_and_slide()
 
 
@@ -288,7 +316,7 @@ func _shoot() -> void:
 	_attack_timer = attack_cooldown
 	anim.play(_anim.get(attack_logical, _anim.get("Punch", _anim["Run"])))
 	if randf() < 0.6:
-		_say(SND_ATTACK, 0.9, 1.1, true)
+		_say(voice_attack, 0.9, 1.1, true)
 	await get_tree().create_timer(0.55).timeout
 	if state == State.DEAD or player == null:
 		return
@@ -312,7 +340,7 @@ func _attack() -> void:
 	_attack_timer = attack_cooldown
 	anim.play(_anim.get(attack_logical, _anim.get("Punch", _anim["Run"])))
 	if randf() < 0.5:  # her vuruşta değil — sürekli ses sinir bozucu oluyordu
-		_say(SND_ATTACK, 0.95, 1.12, true)
+		_say(voice_attack, 0.95, 1.12, true)
 	await get_tree().create_timer(0.45).timeout
 	if state == State.DEAD or player == null:
 		return
@@ -535,13 +563,62 @@ func take_damage(amount: float, _headshot := false) -> void:
 		return
 	health -= amount
 	health_changed.emit(maxf(health, 0.0), max_health)
+	_blood_burst()
 	if health <= 0.0:
 		_die()
-	elif state != State.ATTACK:
-		# kısa irkilme animasyonu
-		anim.play(_anim["RecieveHit"])
-		if randf() < 0.5:
-			_say(SND_HURT, 0.95, 1.15, true)
+		return
+	# geri itilme (oyuncudan uzağa); boss'ta çok hafif → ezilmez ama tepki verir
+	if player != null:
+		var away := global_position - player.global_position
+		away.y = 0.0
+		if away.length() > 0.01:
+			_knockback = away.normalized() * (0.7 if is_boss else 3.0)
+	# irkilme animasyonu: boss'ta YOK (yürüyüşü bozup titretiyordu), normal
+	# düşmanda aralıklı (her mermide baştan oynamasın)
+	if _react_cd <= 0.0:
+		_react_cd = 0.3
+		if not is_boss and state != State.ATTACK:
+			anim.play(_anim["RecieveHit"])
+	# hurt sesi: aralıklı ve kendini kesmeden (ağaağa spam'i biter)
+	if _hurt_cd <= 0.0:
+		_hurt_cd = randf_range(0.45, 0.7)
+		_say(voice_hurt, 0.92, 1.15)
+
+
+func _blood_burst() -> void:
+	## vuruş geri bildirimi: gövde hizasında kısa kan sıçraması (oyuncuya doğru)
+	var ps := CPUParticles3D.new()
+	ps.one_shot = true
+	ps.emitting = true
+	ps.amount = 8
+	ps.lifetime = 0.35
+	ps.explosiveness = 1.0
+	ps.position = Vector3(0, 1.1, 0)
+	ps.gravity = Vector3(0, -6.0, 0)
+	ps.initial_velocity_min = 1.5
+	ps.initial_velocity_max = 3.5
+	ps.spread = 55.0
+	if player != null:
+		var d := global_position - player.global_position
+		d.y = 0.0
+		if d.length() > 0.01:
+			ps.direction = d.normalized() + Vector3(0, 0.4, 0)
+	ps.scale_amount_min = 0.12
+	ps.scale_amount_max = 0.28
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(0.6, 0.02, 0.02, 1.0))
+	ramp.set_color(1, Color(0.25, 0.0, 0.0, 0.0))
+	ps.color_ramp = ramp
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	mat.albedo_texture = load("res://assets/fx/blood_dot.png")
+	mat.vertex_color_use_as_albedo = true
+	ps.mesh = QuadMesh.new()
+	ps.material_override = mat
+	add_child(ps)
+	get_tree().create_timer(0.6).timeout.connect(ps.queue_free)
 
 
 func _say(streams, lo: float, hi: float, force := false) -> void:
@@ -558,7 +635,7 @@ func _die() -> void:
 	$Collision.set_deferred("disabled", true)
 	anim.speed_scale = 1.0
 	anim.play(_anim["Death"])
-	_say(SND_DEATH, 0.85, 1.05, true)
+	_say(voice_death, 0.85, 1.05, true)
 	if behavior == "exploder":
 		_explode()
 	Game.add_kill()

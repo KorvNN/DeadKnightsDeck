@@ -215,9 +215,12 @@ func _throw_grenade() -> void:
 
 
 func refresh_stats() -> void:
-	## kart seçimi sonrası: yeni kalkan kapasitesi hemen dolar (seçim anında ödül hissi)
-	shield = max_shield
-	grenades = max_grenades  # bombalar da dolar
+	## kalkan ANINDA dolmaz — hasarsız beklerken yavaşça dolar (SHIELD_DELAY/REGEN).
+	## bomba kilidi açılınca 1 ile başlarsın, gerisi zamanla dolar.
+	shield = minf(shield, max_shield)  # kapasite düştüyse taşmayı kes; doldurma yapma
+	if max_grenades > 0 and grenades < 1:
+		grenades = 1
+	grenades = mini(grenades, max_grenades)
 	health_changed.emit(health, max_health)
 	shield_changed.emit(shield, max_shield)
 	stamina_changed.emit(stamina, max_stamina)

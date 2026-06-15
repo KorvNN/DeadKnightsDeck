@@ -17,6 +17,7 @@ var kills := 0
 var picked_cards := {}  ## kart id -> kaç kez seçildi
 var picked_order: Array[String] = []  ## seçim sırası — kat geçişinde sırayla yeniden uygulanır
 var carry_health := -1.0  ## kat geçişinde taşınan can (<0: tam dolu başla)
+var carry_ammo := {}      ## kat geçişinde taşınan mermi (slot -> Vector2i(şarjör, yedek))
 var stage := 1  ## global ilerleme sayacı (tüm bölümler boyunca artar)
 var run_seed := 0  ## bu oyunun labirent tohumu
 var gold := 0
@@ -25,6 +26,7 @@ var castle_intro_shown := false  ## şatoya giriş hikâye ekranı
 var afterlife := ""  ## Cerberus sonrası seçim: "heaven" (bulutlar) / "hell" (lav)
 var won := false  ## koşu zaferle bitti mi (koşu-özeti ekranı bunu okur)
 var debug_stage := 0  ## geliştirme kısayolu: --stage=N ile koşu o kattan başlar (play2.bat)
+var debug_cards: Array[String] = []  ## --cards=id1,id2 ile koşuya hazır silah seti/yükseltme
 
 var run_time := 0.0       ## bu koşunun aktif (duraklatma hariç) oyun süresi — speedrun
 var _run_active := false
@@ -35,6 +37,10 @@ func _ready() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--stage="):
 			debug_stage = maxi(arg.get_slice("=", 1).to_int(), 0)
+		elif arg.begins_with("--cards="):
+			debug_cards.clear()
+			for cid: String in arg.get_slice("=", 1).split(",", false):
+				debug_cards.append(cid.strip_edges())
 
 
 func _process(delta: float) -> void:
@@ -147,7 +153,12 @@ func reset() -> void:
 	picked_cards.clear()
 	picked_order.clear()
 	carry_health = -1.0
+	carry_ammo = {}
 	stage = maxi(debug_stage, 1)
+	# debug: --cards ile gelen seti koşu başına hazır kur (silah evrimi dahil)
+	for cid: String in debug_cards:
+		picked_order.append(cid)
+		picked_cards[cid] = picked_cards.get(cid, 0) + 1
 	run_seed = randi()
 	gold = 0
 	intro_shown = false

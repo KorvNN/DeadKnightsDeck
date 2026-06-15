@@ -1,19 +1,21 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/weapon_data.gd" id="1"]
 [ext_resource type="PackedScene" path="res://assets/weapons/Shotgun.fbx" id="2"]
 [ext_resource type="AudioStream" path="res://assets/audio/weapons/shotgun_fire.wav" id="3"]
 [ext_resource type="AudioStream" path="res://assets/audio/weapons/shotgun_reload.wav" id="4"]
+[ext_resource type="Texture2D" path="res://assets/weapons/icons/shotgun.png" id="5"]
 
 [resource]
 script = ExtResource("1")
+icon = ExtResource("5")
 display_name = "Pompalı"
 damage = 9.0
 fire_rate = 1.3
 mag_size = 6
 reserve_ammo = 48
 auto = false
-reload_time = 1.8
+reload_time = 2.4
 headshot_mult = 2.0
 pellets = 7
 spread_deg = 5.0

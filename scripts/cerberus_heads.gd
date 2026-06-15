@@ -17,7 +17,8 @@ var _parts := []   # [{node, lateral, fwd, up, yaw}]
 var _bob := 0.0
 var _fires: Array[CPUParticles3D] = []        # faz 2 öfkesinde büyür
 var _eye_mats: Array[StandardMaterial3D] = []  # faz 2 öfkesinde parlar
-var _body_mats: Array[StandardMaterial3D] = [] # faz 2'de daha kızıl kor
+var _body_mats: Array[StandardMaterial3D] = [] # faz 2'de daha kızıl kor (kurt gövdesi)
+var _head_mats: Array[StandardMaterial3D] = [] # faz 2'de kızıl kor (yan kafa kutuları)
 
 
 func setup(model: Node3D, world_scale: float, snout_sign := 1.0) -> void:
@@ -29,13 +30,14 @@ func setup(model: Node3D, world_scale: float, snout_sign := 1.0) -> void:
 	# orta kafa: kurt kafasının üstüne sadece gözler + ağız ateşi (en yüksek, en önde)
 	var center := _make_head(false)
 	add_child(center)
-	_parts.append({"node": center, "lateral": 0.0, "fwd": 0.30, "up": 0.12, "yaw": 0.0})
-	# iki yan kafa: tam primitif kafa, AŞAĞI-DIŞA açılı (yelpaze) → ayrı boyunlar
+	_parts.append({"node": center, "lateral": 0.0, "fwd": 0.32, "up": 0.18, "yaw": 0.0})
+	# iki yan kafa: orta kafanın hemen yanında, hafif geride ve aşağıda — sıkı küme,
+	# omuzdan çıkan üç kafa hissi (ne yapışık ne de havada dağınık)
 	for sgn in [-1.0, 1.0]:
 		var h := _make_head(true)
 		add_child(h)
-		_parts.append({"node": h, "lateral": sgn * 0.66, "fwd": -0.04,
-				"up": -0.10, "yaw": sgn * deg_to_rad(40.0)})
+		_parts.append({"node": h, "lateral": sgn * 0.38, "fwd": 0.12,
+				"up": 0.0, "yaw": sgn * deg_to_rad(20.0)})
 
 
 func _darken_body() -> void:
@@ -65,28 +67,30 @@ func _make_head(full: bool) -> Node3D:
 	mat.emission_energy_multiplier = 0.18
 
 	if full:
-		# boyun bağlantısı: kafadan geriye (gövdeye doğru) uzanır → "ayrı boyun" hissi
-		var neck := _box(mat, Vector3(0.22, 0.24, 0.62), Vector3(0, -0.07, -0.38))
+		_head_mats.append(mat)  # faz 2'de orta kafayla birlikte kızıllaşsın
+		# kısa kalın boyun: kafadan omuza iner (uzun çubuk yerine doğal bağlantı)
+		var neck := _box(mat, Vector3(0.26, 0.30, 0.46), Vector3(0, -0.14, -0.26))
+		neck.rotation.x = 0.22
 		head.add_child(neck)
-		# kafatası
-		head.add_child(_box(mat, Vector3(0.30, 0.30, 0.30), Vector3(0, 0, 0)))
-		# kaş çıkıntısı (kızgın hat)
-		head.add_child(_box(mat, Vector3(0.30, 0.09, 0.12), Vector3(0, 0.11, 0.15)))
-		# burun köprüsü (uzun)
-		head.add_child(_box(mat, Vector3(0.18, 0.15, 0.40), Vector3(0, -0.01, 0.31)))
+		# kafatası (arka geniş)
+		head.add_child(_box(mat, Vector3(0.30, 0.30, 0.34), Vector3(0, 0, -0.02)))
+		# alın/kaş hattı
+		head.add_child(_box(mat, Vector3(0.28, 0.10, 0.14), Vector3(0, 0.12, 0.14)))
+		# uzun burun köprüsü (öne uzanır)
+		head.add_child(_box(mat, Vector3(0.17, 0.15, 0.34), Vector3(0, -0.02, 0.28)))
 		# burun ucu (daralan)
-		head.add_child(_box(mat, Vector3(0.13, 0.12, 0.13), Vector3(0, -0.03, 0.54)))
+		head.add_child(_box(mat, Vector3(0.12, 0.11, 0.16), Vector3(0, -0.04, 0.48)))
 		# alt çene
-		head.add_child(_box(mat, Vector3(0.16, 0.07, 0.34), Vector3(0, -0.12, 0.29)))
+		head.add_child(_box(mat, Vector3(0.15, 0.07, 0.30), Vector3(0, -0.12, 0.26)))
 		# sivri kulaklar
 		for ex in [-1.0, 1.0]:
 			var ear := MeshInstance3D.new()
 			var eb := PrismMesh.new()
-			eb.size = Vector3(0.11, 0.26, 0.06)
+			eb.size = Vector3(0.12, 0.24, 0.06)
 			ear.mesh = eb
 			ear.material_override = mat
-			ear.position = Vector3(ex * 0.11, 0.24, -0.05)
-			ear.rotation = Vector3(-0.18, 0, ex * -0.30)
+			ear.position = Vector3(ex * 0.12, 0.26, -0.06)
+			ear.rotation = Vector3(-0.15, 0, ex * -0.26)
 			head.add_child(ear)
 
 	# gözler (yerel öne/yukarı)
@@ -179,9 +183,11 @@ func enrage() -> void:
 		em.emission_energy_multiplier = 5.0
 		em.albedo_color = Color(1.0, 0.4, 0.1)
 		em.emission = Color(1.0, 0.4, 0.1)
-	for bm in _body_mats:
-		bm.emission = Color(0.55, 0.1, 0.03)
-		bm.emission_energy_multiplier = 0.4
+	# gövde + YAN KAFALAR birlikte kızıl kora döner (yan kafalar artık geride kalmaz)
+	for bm in _body_mats + _head_mats:
+		bm.albedo_color = Color(0.22, 0.05, 0.04)
+		bm.emission = Color(0.7, 0.12, 0.03)
+		bm.emission_energy_multiplier = 0.55
 
 
 func _process(delta: float) -> void:

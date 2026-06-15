@@ -23,6 +23,9 @@ func _ready() -> void:
 	Game.reset()
 	Music.play_menu()
 	_build()
+	# debug: --stage=N ile açıldıysa menüyü atlayıp doğrudan koşuya gir
+	if Game.debug_stage > 0:
+		call_deferred("_on_start")
 
 
 func _process(delta: float) -> void:
