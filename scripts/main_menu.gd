@@ -5,7 +5,7 @@ extends Control
 const LEVEL_SCENE := "res://scenes/main/dungeon.tscn"
 const SettingsMenuScript := preload("res://scripts/settings_menu.gd")
 const KAYKIT := "res://addons/kaykit_dungeon_remastered/assets/gltf/"
-const ZOMBIE_MODEL := "res://assets/characters/Zombie_Male.gltf"
+const KNIGHT_MODEL := "res://assets/characters/Knight_Golden_Male.gltf"
 const WEAPONS := "res://assets/weapons/"
 
 var _cam: Camera3D
@@ -65,7 +65,8 @@ func _build() -> void:
 	add_child(top)
 	top.add_child(_pop(MenuUI.make_title("DEAD KNIGHT'S", 116)))
 	top.add_child(_pop(MenuUI.make_title("DECK", 116)))
-	var subtitle := _pop(MenuUI.make_title("DESTENİ KUR, KARANLIĞA İN", 26, Color(0.78, 0.80, 0.82)))
+
+	var subtitle := _pop(MenuUI.make_title("DESTENİ KUR, KARANLIĞA İN", 26, Color(0.80, 0.72, 0.55)))
 	subtitle.add_theme_constant_override("outline_size", 6)
 	top.add_child(subtitle)
 
@@ -74,7 +75,7 @@ func _build() -> void:
 	menu.set_anchors_preset(Control.PRESET_CENTER)
 	menu.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	menu.grow_vertical = Control.GROW_DIRECTION_BOTH
-	menu.position += Vector2(0, 70)  # başlığın altında, sahneyle dengeli
+	menu.position += Vector2(0, 104)  # başlığın/alt başlığın altında, net boşlukla
 	menu.alignment = BoxContainer.ALIGNMENT_CENTER
 	menu.add_theme_constant_override("separation", 16)
 	add_child(menu)
@@ -155,14 +156,14 @@ func _build_background() -> void:
 	_place(world, "column.gltf.glb", Vector3(-4.4, 0, -5.3))
 	_place(world, "column.gltf.glb", Vector3(4.6, 0, -5.3))
 
-	# --- ateşin başında taburede oturan yorgun zombi ---
+	# --- ateşin başında taburede oturan yorgun şövalye ---
 	# SitDown son karesinde kemik ölçümü (prob): kalça lokal (0, 0.57, -0.42),
 	# ayaklar yerde (y 0.02, z -0.05). Scale 0.9 → kalça 0.51 yükseklikte,
 	# root'un 0.38 gerisinde. Tabure üstü 0.5 → fig_y ≈ 0, tabure kalçanın altında
 	# (yaw -20°'ye göre döndürülmüş offset: +0.13x, -0.36z).
 	var fig_pos := Vector3(2.3, -0.01, -4.5)
 	_place(world, "stool.gltf.glb", Vector3(fig_pos.x + 0.13, 0, fig_pos.z - 0.36), -20.0)
-	_fig = (load(ZOMBIE_MODEL) as PackedScene).instantiate()
+	_fig = (load(KNIGHT_MODEL) as PackedScene).instantiate()
 	_fig.scale = Vector3.ONE * 0.9
 	_fig.position = fig_pos
 	# GLTF modelin doğal yüzü +Z (zombie.gd'den kanıtlı). Ateş sol-önde →
@@ -377,7 +378,7 @@ func _on_settings() -> void:
 func _on_stats() -> void:
 	var runs := Game.leaderboard()
 	var font: Font = load("res://assets/fonts/ui_font.tres")
-	var green := Color(0.45, 0.85, 0.4)
+	var green := MenuUI.GOLD
 
 	var overlay := Control.new()
 	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -392,7 +393,7 @@ func _on_stats() -> void:
 	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.08, 0.1, 0.12, 0.98)
+	sb.bg_color = MenuUI.STEEL_PANEL
 	sb.border_color = green
 	sb.set_border_width_all(3)
 	sb.set_corner_radius_all(10)
