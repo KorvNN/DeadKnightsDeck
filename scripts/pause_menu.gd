@@ -126,7 +126,7 @@ func _build() -> void:
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	var panel_sb := StyleBoxFlat.new()
 	panel_sb.bg_color = Color(0.07, 0.08, 0.11, 0.94)
-	panel_sb.border_color = Color(0.5, 0.85, 0.3)
+	panel_sb.border_color = MenuUI.GOLD
 	panel_sb.set_border_width_all(2)
 	panel_sb.set_corner_radius_all(8)
 	panel_sb.content_margin_left = 24
@@ -163,21 +163,21 @@ func _select_page(idx: int) -> void:
 		var sb := StyleBoxFlat.new()
 		sb.set_corner_radius_all(8)
 		sb.set_border_width_all(2)
-		sb.border_color = Color(0.5, 0.85, 0.3)
+		sb.border_color = MenuUI.GOLD
 		if i == idx:
-			# seçili sekme: dolu yeşil (ESC butonlarının hover hâli)
-			sb.bg_color = Color(0.5, 0.85, 0.3)
-			btn.add_theme_color_override("font_color", Color(0.08, 0.1, 0.08))
+			# seçili sekme: dolu altın, koyu yazı
+			sb.bg_color = MenuUI.GOLD
+			btn.add_theme_color_override("font_color", Color(0.10, 0.08, 0.04))
 		else:
-			sb.bg_color = Color(0.12, 0.14, 0.17)
-			btn.add_theme_color_override("font_color", Color(0.9, 0.92, 0.9))
+			sb.bg_color = MenuUI.STEEL
+			btn.add_theme_color_override("font_color", MenuUI.TEXT)
 		btn.add_theme_stylebox_override("normal", sb)
 		var hover := sb.duplicate() as StyleBoxFlat
-		hover.bg_color = Color(0.5, 0.85, 0.3)
+		hover.bg_color = MenuUI.BLOOD          # üzerine gelince kan kırmızısı
 		btn.add_theme_stylebox_override("hover", hover)
 		btn.add_theme_stylebox_override("pressed", hover)
-		btn.add_theme_color_override("font_hover_color", Color(0.08, 0.1, 0.08))
-		btn.add_theme_color_override("font_pressed_color", Color(0.08, 0.1, 0.08))
+		btn.add_theme_color_override("font_hover_color", MenuUI.TEXT_HI)
+		btn.add_theme_color_override("font_pressed_color", MenuUI.TEXT_HI)
 
 
 func _refresh_tabs() -> void:
@@ -213,7 +213,7 @@ func _fill_stats(player: Node, weapon: Node) -> void:
 		panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.08, 0.1, 0.09)
-		sb.border_color = Color(0.45, 0.85, 0.4)
+		sb.border_color = MenuUI.GOLD
 		sb.set_border_width_all(3)
 		sb.set_corner_radius_all(8)
 		panel.add_theme_stylebox_override("panel", sb)
@@ -282,7 +282,7 @@ func _weapon_icon(display_name: String) -> Texture2D:
 
 
 func _weapon_box(display_name: String, sub: String, active: bool) -> PanelContainer:
-	var accent := Color(0.5, 0.85, 0.3) if active else Color(0.5, 0.52, 0.58)
+	var accent := MenuUI.GOLD if active else Color(0.5, 0.52, 0.58)
 	var box := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.11, 0.12, 0.16) if active else Color(0.09, 0.10, 0.13)
@@ -507,7 +507,7 @@ func _make_path_row(evo: UpgradeCard) -> HBoxContainer:
 		if have <= 0 and not owned:
 			row.add_child(_path_box("?", "", null, Color(0.45, 0.45, 0.5), true))
 		else:
-			var state_color := Color(0.5, 0.95, 0.4) if have >= need else Color(0.95, 0.85, 0.4)
+			var state_color := MenuUI.GOLD if have >= need else Color(0.95, 0.85, 0.4)
 			var req_title := req_card.title if req_card != null else req_id
 			var req_icon := req_card.icon() if req_card != null else null
 			row.add_child(_path_box(req_title, "%d/%d" % [mini(have, need), need], req_icon, state_color, false))
@@ -593,7 +593,7 @@ func _section(text: String) -> Label:
 	l.text = text
 	l.add_theme_font_override("font", MenuUI.FONT)
 	l.add_theme_font_size_override("font_size", 20)
-	l.add_theme_color_override("font_color", Color(0.5, 0.85, 0.3))
+	l.add_theme_color_override("font_color", MenuUI.GOLD)
 	return l
 
 

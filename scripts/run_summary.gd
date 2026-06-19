@@ -3,7 +3,7 @@ extends CanvasLayer
 ## speedrun leaderboard'u, silah tutan 3D zombi ve yeniden başlat/menü/çıkış.
 
 const CHAR_VIEW := preload("res://scripts/character_view.gd")
-const GREEN := Color(0.45, 0.85, 0.4)
+const GREEN := Color(0.84, 0.67, 0.28)  # altın (eski yeşil tema yerine)
 
 var _font: Font
 var _runs: Array = []

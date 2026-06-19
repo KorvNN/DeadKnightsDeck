@@ -106,7 +106,7 @@ func _build_ui() -> void:
 	title.text = "AYARLAR"
 	title.add_theme_font_override("font", FONT)
 	title.add_theme_font_size_override("font_size", 42)
-	title.add_theme_color_override("font_color", Color(0.5, 0.85, 0.3))
+	title.add_theme_color_override("font_color", MenuUI.GOLD)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	root.add_child(title)
 	root.add_child(HSeparator.new())
@@ -255,7 +255,7 @@ func _volume_row(text: String, value: float, setter: Callable) -> HBoxContainer:
 	pct.text = "%d%%" % roundi(value * 100)
 	pct.add_theme_font_override("font", FONT)
 	pct.add_theme_font_size_override("font_size", 18)
-	pct.add_theme_color_override("font_color", Color(0.55, 0.85, 0.4))
+	pct.add_theme_color_override("font_color", MenuUI.GOLD)
 	pct.custom_minimum_size = Vector2(60, 0)
 	row.add_child(pct)
 
