@@ -157,19 +157,16 @@ func _build_background() -> void:
 	_place(world, "column.gltf.glb", Vector3(4.6, 0, -5.3))
 
 	# --- ateşin başında taburede oturan yorgun şövalye ---
-	# SitDown son karesinde kemik ölçümü (prob): kalça lokal (0, 0.57, -0.42),
-	# ayaklar yerde (y 0.02, z -0.05). Scale 0.9 → kalça 0.51 yükseklikte,
-	# root'un 0.38 gerisinde. Tabure üstü 0.5 → fig_y ≈ 0, tabure kalçanın altında
-	# (yaw -20°'ye göre döndürülmüş offset: +0.13x, -0.36z).
-	var fig_pos := Vector3(2.3, -0.01, -4.5)
+	# ayakları ateş taşlarına girmesin diye ateşten biraz geriye/sağa alındı,
+	# ayaklar açık zemine denk gelir (SitDown'da ayaklar +Z yönünde önde).
+	var fig_pos := Vector3(2.55, -0.01, -5.0)
 	_place(world, "stool.gltf.glb", Vector3(fig_pos.x + 0.13, 0, fig_pos.z - 0.36), -20.0)
 	_fig = (load(KNIGHT_MODEL) as PackedScene).instantiate()
 	_fig.scale = Vector3.ONE * 0.9
 	_fig.position = fig_pos
-	# GLTF modelin doğal yüzü +Z (zombie.gd'den kanıtlı). Ateş sol-önde →
-	# hafif sola dönük (-20°) ateşe bakar.
+	# GLTF modelin doğal yüzü +Z. Ateş sol-önde → hafif sola dönük ateşe bakar.
 	_fig.rotation_degrees.y = -20.0
-	_fig_rot = -6.0                   # geriye, duvara yaslanmış
+	_fig_rot = -6.0                   # geriye, duvara yaslanmış yorgun duruş
 	world.add_child(_fig)
 	var fig_anim: AnimationPlayer = _fig.find_child("AnimationPlayer", true, false)
 	if fig_anim and fig_anim.has_animation("SitDown"):
