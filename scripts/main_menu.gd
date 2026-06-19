@@ -63,8 +63,9 @@ func _build() -> void:
 	top.add_theme_constant_override("separation", 6)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(top)
-	top.add_child(_pop(MenuUI.make_title("ZOMGRADE", 140)))
-	var subtitle := _pop(MenuUI.make_title("ZOMBİ DALGALARINDAN SAĞ ÇIK", 26, Color(0.78, 0.80, 0.82)))
+	top.add_child(_pop(MenuUI.make_title("DEAD KNIGHT'S", 116)))
+	top.add_child(_pop(MenuUI.make_title("DECK", 116)))
+	var subtitle := _pop(MenuUI.make_title("DESTENİ KUR, KARANLIĞA İN", 26, Color(0.78, 0.80, 0.82)))
 	subtitle.add_theme_constant_override("outline_size", 6)
 	top.add_child(subtitle)
 
