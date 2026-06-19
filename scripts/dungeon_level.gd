@@ -2946,17 +2946,17 @@ func _build_balcony_vista(w: float) -> void:
 
 
 func _build_water_features(w: float) -> void:
-	## yerin içinden geçen DAR su akıntısı (doğu-batı, boydan boya) + üstünde 2 BÜYÜK köprü.
-	## Akıntının iki yanı YÜKSEK taş set (collision + navmesh engeli) → suya girilmez,
-	## etrafından dolanılamaz (su perimetreden perimetreye); sadece köprülerden geçilir.
+	## yerin içinden geçen DAR su akıntısı (doğu-batı, boydan boya) + üstünde 3 köprü.
+	## Su üstünden geçilemez: kanalı GÖRÜNMEZ engel kaplar (visible=false mesh → navmesh engeli
+	## + collision → oyuncu giremez). Görünür taş set YOK. Orta köprü boss'un tam karşısında
+	## (x=w/2) → boss düz koşar, engele takılmaz; geçişler yalnız köprülerden.
 	var cx := w * 0.5
 	var cz := w * 0.5            # akıntı orta hatta
-	var half := 0.7             # dar akıntı yarı genişliği (su "akıntısı")
-	var bank_h := 1.4           # set yüksekliği (agent tırmanışından yüksek → navmesh engeli)
-	var bank_t := 0.5           # set kalınlığı
-	var bridges: Array[float] = [w * 0.3, w * 0.7]
-	var bridge_hw := 3.25       # köprü yarı genişliği (büyütüldü)
-	var gap := 3.0              # set boşluğu yarısı (köprü altında kalır)
+	var half := 0.75            # dar akıntı yarı genişliği (su "akıntısı")
+	var block_half := 1.0       # görünmez engel yarı genişliği (sudan biraz geniş)
+	var bridges: Array[float] = [w * 0.22, w * 0.5, w * 0.78]  # ORTA köprü boss'un karşısında
+	var bridge_hw := 3.0        # köprü yarı genişliği
+	var gap := 3.2              # engel boşluğu yarısı (köprü altı tamamen açık)
 
 	var water_mat := StandardMaterial3D.new()
 	water_mat.albedo_color = Color(0.12, 0.4, 0.62, 0.72)  # yarı saydam → zemin "yatak" gibi görünür
@@ -2983,12 +2983,33 @@ func _build_water_features(w: float) -> void:
 		mi.position = pos
 		add_child(mi)
 
-	# katı engel: mesh nav altına (bake'te engel olur) + StaticBody collision (oyuncu geçemez)
-	var add_solid := func(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> void:
+	# GÖRÜNMEZ engel: visible=false mesh (bake'te navmesh engeli) + StaticBody collision (oyuncu geçemez)
+	var add_block := func(size: Vector3, pos: Vector3) -> void:
 		var mi := MeshInstance3D.new()
 		var b := BoxMesh.new()
 		b.size = size
-		b.material = mat
+		mi.mesh = b
+		mi.position = pos
+		mi.visible = false  # görünmez ama navmesh bake yine de geometriyi okur
+		nav.add_child(mi)
+		var body := StaticBody3D.new()
+		# YALNIZ oyuncuyu durdur: katman 3 (bit 4), player maskesi (5) görür; zombie/boss maskesi (3) görmez
+		body.collision_layer = 4
+		body.collision_mask = 0
+		var cs := CollisionShape3D.new()
+		var sh := BoxShape3D.new()
+		sh.size = size
+		cs.shape = sh
+		body.position = pos
+		body.add_child(cs)
+		nav.add_child(body)
+
+	# yürünür köprü döşemesi: ince görünür mesh (navmesh'te yürünür) + collision (üstünde durulur)
+	var add_deck := func(size: Vector3, pos: Vector3) -> void:
+		var mi := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = size
+		b.material = stone
 		mi.mesh = b
 		mi.position = pos
 		nav.add_child(mi)
@@ -3001,30 +3022,34 @@ func _build_water_features(w: float) -> void:
 		body.add_child(cs)
 		nav.add_child(body)
 
+	# segment hesaplayıcı: köprü boşlukları dışında kalan [x0,x1] su parçaları
+	var stops := bridges.duplicate()
+	stops.sort()
+	var segments: Array = []
+	var seg_a := 0.3
+	for bx2: float in stops:
+		var seg_b: float = bx2 - gap
+		if seg_b > seg_a:
+			segments.append([seg_a, seg_b])
+		seg_a = bx2 + gap
+	if w - 0.3 > seg_a:
+		segments.append([seg_a, w - 0.3])
+
 	# koyu ıslak yatak (zemine gömülü) + üstünde yarı saydam ince su tabakası (boydan boya)
 	add_box.call(Vector3(w, 0.10, half * 2.0), Vector3(cx, -0.03, cz), bed_mat)
 	add_box.call(Vector3(w, 0.06, half * 2.0 - 0.1), Vector3(cx, 0.02, cz), water_mat)
 
-	# iki yan YÜKSEK taş set — köprü boşlukları hariç boydan boya (suya girişi + dolanmayı engeller)
-	for s: float in [-1.0, 1.0]:
-		var bz := cz + s * (half + bank_t * 0.5)
-		var seg_a := 0.4
-		var stops := bridges.duplicate()
-		stops.sort()
-		for bx2: float in stops:
-			var seg_b: float = bx2 - gap
-			if seg_b > seg_a:
-				add_solid.call(Vector3(seg_b - seg_a, bank_h, bank_t),
-						Vector3((seg_a + seg_b) * 0.5, bank_h * 0.5, bz), stone)
-			seg_a = bx2 + gap
-		if w - 0.4 > seg_a:
-			add_solid.call(Vector3((w - 0.4) - seg_a, bank_h, bank_t),
-					Vector3((seg_a + (w - 0.4)) * 0.5, bank_h * 0.5, bz), stone)
+	# görünmez engel: köprü boşlukları hariç tüm kanalı kaplar (suya girilemez, etrafından dolanılamaz)
+	for seg: Array in segments:
+		var s0: float = seg[0]
+		var s1: float = seg[1]
+		add_block.call(Vector3(s1 - s0, 2.0, block_half * 2.0),
+				Vector3((s0 + s1) * 0.5, 1.0, cz))
 
-	# 2 BÜYÜK köprü: düz taş döşeme (navmesh'te yürünür, kuzey-güneyi bağlar) + korkuluk
+	# 3 köprü: düz döşeme (navmesh'te yürünür, kuzey-güneyi bağlar) + görsel korkuluk
 	var deck_z := half * 2.0 + 2.6
 	for bx: float in bridges:
-		add_solid.call(Vector3(bridge_hw * 2.0, 0.18, deck_z), Vector3(bx, 0.09, cz), stone)
+		add_deck.call(Vector3(bridge_hw * 2.0, 0.18, deck_z), Vector3(bx, 0.09, cz))
 		for s: float in [-1.0, 1.0]:
 			# köprü kenar korkuluğu (doğu-batı boyu; yürüyüşü engellemez)
 			add_box.call(Vector3(0.2, 0.7, deck_z), Vector3(bx + s * (bridge_hw - 0.2), 0.45, cz), stone)
@@ -3033,33 +3058,38 @@ func _build_water_features(w: float) -> void:
 				add_box.call(Vector3(0.36, 0.95, 0.36),
 						Vector3(bx + s * (bridge_hw - 0.2), 0.55, cz + ez * (deck_z * 0.5 - 0.2)), stone)
 
-	# akıntı parıltısı: su boyunca batıdan doğuya sürüklenen köpük (akış hissi)
-	var flow := CPUParticles3D.new()
-	flow.amount = 46
-	flow.lifetime = 4.2
-	flow.position = Vector3(1.5, 0.1, cz)
-	flow.direction = Vector3(1, 0, 0)
-	flow.spread = 3.0
-	flow.gravity = Vector3.ZERO
-	flow.initial_velocity_min = 8.0
-	flow.initial_velocity_max = 11.0
-	flow.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	flow.emission_box_extents = Vector3(0.4, 0.02, half * 0.8)
-	flow.scale_amount_min = 0.05
-	flow.scale_amount_max = 0.13
+	# akıntı köpüğü: SADECE su segmentlerinde (köprülerin üstünde partikül olmaz)
 	var framp := Gradient.new()
 	framp.set_color(0, Color(0.85, 0.95, 1.0, 0.0))
-	framp.add_point(0.18, Color(0.9, 0.97, 1.0, 0.65))
+	framp.add_point(0.2, Color(0.9, 0.97, 1.0, 0.6))
 	framp.set_color(1, Color(0.7, 0.85, 1.0, 0.0))
-	flow.color_ramp = framp
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	fm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
-	flow.mesh = QuadMesh.new()
-	flow.material_override = fm
-	add_child(flow)
+	for seg: Array in segments:
+		var s0: float = seg[0]
+		var s1: float = seg[1]
+		if s1 - s0 < 1.0:
+			continue
+		var flow := CPUParticles3D.new()
+		flow.amount = maxi(6, int((s1 - s0) * 1.4))
+		flow.lifetime = 1.6
+		flow.position = Vector3((s0 + s1) * 0.5, 0.07, cz)  # köprü döşemesi altında kalır
+		flow.direction = Vector3(1, 0, 0)
+		flow.spread = 4.0
+		flow.gravity = Vector3.ZERO
+		flow.initial_velocity_min = 0.8
+		flow.initial_velocity_max = 1.6
+		flow.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		flow.emission_box_extents = Vector3((s1 - s0) * 0.5 - 0.2, 0.02, half * 0.7)
+		flow.scale_amount_min = 0.05
+		flow.scale_amount_max = 0.12
+		flow.color_ramp = framp
+		flow.mesh = QuadMesh.new()
+		flow.material_override = fm
+		add_child(flow)
 
 
 # ---------- balkon: Cerberus boss arenası ----------
@@ -3117,7 +3147,7 @@ func _build_cerberus_arena() -> void:
 	player.rotation.y = 0.0  # kuzeye, arenaya bakar
 
 	_arena_size = Vector2(w, w)
-	_gate_pos = Vector3(w * 0.3, 0, w * 0.5)  # batı köprüsünün üstünde (su üstünde değil)
+	_gate_pos = Vector3(w * 0.5, 0, w * 0.5)  # orta köprünün üstünde (su üstünde değil)
 	_boss_name = "CERBERUS"
 	_build_stage_ui()
 	_build_boss_bar()
@@ -3313,10 +3343,10 @@ func _on_cerberus_defeated() -> void:
 
 func _spawn_choice_portal(pos: Vector3, kind: String) -> void:
 	var heaven := kind == "heaven"
-	# istenildiği gibi cehennem portalı da MAVİ (cennet açık camgöbeği, cehennem derin çivit)
-	var edge_col := Color(0.5, 0.82, 1.0) if heaven else Color(0.34, 0.5, 1.0)
-	var core_col := Color(0.88, 0.96, 1.0) if heaven else Color(0.68, 0.78, 1.0)
-	var deep_col := Color(0.55, 0.78, 1.0, 0.6) if heaven else Color(0.1, 0.12, 0.42, 0.78)
+	# cennet açık camgöbeği (aynı kaldı), cehennem KIRMIZI (kıvılcımlar da kırmızı)
+	var edge_col := Color(0.5, 0.82, 1.0) if heaven else Color(1.0, 0.28, 0.12)
+	var core_col := Color(0.88, 0.96, 1.0) if heaven else Color(1.0, 0.58, 0.3)
+	var deep_col := Color(0.55, 0.78, 1.0, 0.6) if heaven else Color(0.34, 0.04, 0.03, 0.8)
 	var root := Node3D.new()
 	root.position = pos + Vector3(0, 1.85, 0)
 	add_child(root)
