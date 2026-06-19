@@ -1,0 +1,12 @@
+Ses Atıfları / Audio Attributions
+=================================
+
+Silah ateş sesleri (pistol_fire, rifle_fire, shotgun_fire, sniper_fire):
+  "Gunshot Sounds" — Vincent Sevedge (2009)
+  Lisans: Creative Commons Attribution 3.0 (CC BY 3.0)
+  http://creativecommons.org/licenses/by/3.0/
+  Kaynak: https://opengameart.org/content/gunshot-sounds
+  (CZ-52, Mosin-Nagant, SKS ve shotgun kayıtlarından tek atış olarak kırpıldı.)
+
+Impact / footstep / interface sesleri:
+  Kenney (kenney.nl) — CC0
