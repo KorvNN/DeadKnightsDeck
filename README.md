@@ -2,10 +2,9 @@
 
 The knight is dead. The deck is not.
 
-Rise through a cursed garden and a broken castle, take what the cards offer,
-and fall again — deeper each time.
-
-*A first-person roguelite. Godot 4.6.*
+A 3D roguelike shooter built with Godot 4. Rise through a cursed garden and a
+broken castle, eliminate waves of enemies, level up, and evolve your weapons with
+a dynamic card-draft upgrade system — and fall again, deeper each time.
 
 ## Controls
 
