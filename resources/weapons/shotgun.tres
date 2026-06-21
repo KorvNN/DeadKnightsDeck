@@ -24,5 +24,5 @@ view_scale = 0.11
 view_rot_deg = Vector3(0, 0, 0)
 view_pos = Vector3(0.16, -0.18, -0.1)
 fire_sound = ExtResource("3")
-fire_volume_db = -16.0
+fire_volume_db = -4.0
 reload_sound = ExtResource("4")

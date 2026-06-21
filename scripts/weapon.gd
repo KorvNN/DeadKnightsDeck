@@ -94,9 +94,9 @@ func _build_knife_model() -> void:
 	if scn == null:
 		return
 	_knife_model = scn.instantiate()
-	_knife_model.scale = Vector3.ONE * 0.19
-	_knife_model.rotation_degrees = Vector3(-70.0, 16.0, 10.0)
-	_knife_model.position = Vector3(-0.05, 0.03, -0.02)
+	_knife_model.scale = Vector3.ONE * 0.26
+	_knife_model.rotation_degrees = Vector3(-58.0, 22.0, 8.0)
+	_knife_model.position = Vector3(0.14, -0.16, -0.24)  # sağ-alt köşe: elde tutuluyormuş gibi (ortada havada durmasın)
 	_knife_model.visible = false
 	add_child(_knife_model)
 	_knife_base_pos = _knife_model.position

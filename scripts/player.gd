@@ -16,13 +16,39 @@ const GRENADE := preload("res://scripts/grenade.gd")
 @export var mouse_sensitivity := 0.002
 @export var max_health := 100.0
 
-const FOOTSTEPS := [
-	preload("res://assets/audio/impact/footstep_concrete_000.ogg"),
-	preload("res://assets/audio/impact/footstep_concrete_001.ogg"),
-	preload("res://assets/audio/impact/footstep_concrete_002.ogg"),
-	preload("res://assets/audio/impact/footstep_concrete_003.ogg"),
-	preload("res://assets/audio/impact/footstep_concrete_004.ogg"),
-]
+## zemin türüne göre ayak sesi setleri — kat üreticisi biome'a göre seçer
+const FOOTSTEP_SETS := {
+	"concrete": [
+		preload("res://assets/audio/impact/footstep_concrete_000.ogg"),
+		preload("res://assets/audio/impact/footstep_concrete_001.ogg"),
+		preload("res://assets/audio/impact/footstep_concrete_002.ogg"),
+		preload("res://assets/audio/impact/footstep_concrete_003.ogg"),
+		preload("res://assets/audio/impact/footstep_concrete_004.ogg"),
+	],
+	"grass": [
+		preload("res://assets/audio/impact/footstep_grass_000.ogg"),
+		preload("res://assets/audio/impact/footstep_grass_001.ogg"),
+		preload("res://assets/audio/impact/footstep_grass_002.ogg"),
+		preload("res://assets/audio/impact/footstep_grass_003.ogg"),
+		preload("res://assets/audio/impact/footstep_grass_004.ogg"),
+	],
+	"wood": [
+		preload("res://assets/audio/impact/footstep_wood_000.ogg"),
+		preload("res://assets/audio/impact/footstep_wood_001.ogg"),
+		preload("res://assets/audio/impact/footstep_wood_002.ogg"),
+		preload("res://assets/audio/impact/footstep_wood_003.ogg"),
+		preload("res://assets/audio/impact/footstep_wood_004.ogg"),
+	],
+	"snow": [
+		preload("res://assets/audio/impact/footstep_snow_000.ogg"),
+		preload("res://assets/audio/impact/footstep_snow_001.ogg"),
+		preload("res://assets/audio/impact/footstep_snow_002.ogg"),
+		preload("res://assets/audio/impact/footstep_snow_003.ogg"),
+		preload("res://assets/audio/impact/footstep_snow_004.ogg"),
+	],
+}
+var _footsteps: Array = FOOTSTEP_SETS["concrete"]  ## aktif zemin seti (set_footstep_surface ile değişir)
+var _was_on_floor := true  ## iniş sesi için bir önceki kare zemin durumu
 
 var health: float
 var max_shield := 0.0  ## Kalkan kartıyla açılır; hasarı candan önce emer
@@ -52,12 +78,18 @@ var _shield_cd := 0.0          ## son hasardan beri geçen süre
 
 var _step_player: AudioStreamPlayer
 var _step_dist := 0.0  ## son adımdan beri yürünen mesafe
+var _fall_vy := 0.0    ## havadayken izlenen en yüksek düşüş hızı (iniş sesi şiddeti)
 
 @onready var camera: Camera3D = %Camera
 
 var _aim_pitch := 0.0              ## mouse ile kontrol edilen dikey bakış
 var _recoil := Vector2.ZERO        ## geçici recoil ofseti (pitch, yaw)
 var _shake := 0.0                  ## anlık sarsıntı şiddeti
+
+const HEARTBEAT := preload("res://assets/audio/sfx/heartbeat.wav")
+const HB_THRESHOLD := 0.35         ## bu can oranının altında kalp atışı başlar
+var _heartbeat: AudioStreamPlayer
+var _hb_timer := 0.0               ## sonraki atışa kalan süre
 
 
 func _ready() -> void:
@@ -71,6 +103,9 @@ func _ready() -> void:
 	_step_player = AudioStreamPlayer.new()
 	_step_player.volume_db = -15.0
 	add_child(_step_player)
+	_heartbeat = AudioStreamPlayer.new()
+	_heartbeat.stream = HEARTBEAT
+	add_child(_heartbeat)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -88,6 +123,21 @@ func _process(delta: float) -> void:
 	var shake_off := Vector2(randf() - 0.5, randf() - 0.5) * _shake
 	camera.rotation.x = _aim_pitch + _recoil.y + shake_off.y
 	camera.rotation.z = _recoil.x * 0.3 + shake_off.x
+	_update_heartbeat(delta)
+
+
+func _update_heartbeat(delta: float) -> void:
+	## düşük canda kalp atışı: can azaldıkça hızlanır + yükselir (panik hissi)
+	var ratio := health / max_health if max_health > 0.0 else 1.0
+	if dead or ratio > HB_THRESHOLD:
+		_hb_timer = 0.0
+		return
+	var f := clampf((HB_THRESHOLD - ratio) / HB_THRESHOLD, 0.0, 1.0)  # 0=eşikte, 1=ölüm eşiğinde
+	_hb_timer -= delta
+	if _hb_timer <= 0.0:
+		_hb_timer = lerpf(1.05, 0.42, f)        # atış aralığı: yavaş → hızlı
+		_heartbeat.volume_db = lerpf(-9.0, 1.5, f)  # düştükçe yükselir
+		_heartbeat.play()
 
 
 func add_recoil() -> void:
@@ -107,6 +157,7 @@ func _physics_process(delta: float) -> void:
 
 	if Input.is_action_just_pressed("jump") and is_on_floor():
 		velocity.y = jump_velocity
+		_play_step(-13.0, 0.92)  # zıplama itişi: kısık ayak sesi
 
 	# bomba: zamanla yavaşça dolar, G ile atılır
 	if grenades < max_grenades:
@@ -155,9 +206,30 @@ func _physics_process(delta: float) -> void:
 			shield_changed.emit(shield, max_shield)
 
 
+func set_footstep_surface(surface: String) -> void:
+	## kat üreticisi biome'a göre çağırır (bahçe=çim, şato/mahzen=taş, köprü=tahta)
+	_footsteps = FOOTSTEP_SETS.get(surface, FOOTSTEP_SETS["concrete"])
+
+
+func _play_step(volume_db: float, pitch: float) -> void:
+	_step_player.stream = _footsteps[randi() % _footsteps.size()]
+	_step_player.volume_db = volume_db
+	_step_player.pitch_scale = pitch
+	_step_player.play()
+
+
 func _update_footsteps(delta: float) -> void:
-	if not is_on_floor():
+	var on_floor := is_on_floor()
+	# iniş: havadan zemine geçiş → düşüş hızıyla orantılı, pes ve gür bir basış
+	if on_floor and not _was_on_floor:
+		var impact := clampf(_fall_vy / 9.0, 0.0, 1.0)
+		_play_step(lerpf(-15.0, -4.0, impact), lerpf(0.95, 0.78, impact))
+		_step_dist = 0.0
+	_was_on_floor = on_floor
+	if not on_floor:
+		_fall_vy = maxf(_fall_vy, -velocity.y)  # havadayken en yüksek düşüş hızını izle
 		return
+	_fall_vy = 0.0
 	var hspeed := Vector2(velocity.x, velocity.z).length()
 	if hspeed < 1.0:
 		_step_dist = 1.8  # durunca: bir sonraki adım hemen çalsın
@@ -165,9 +237,7 @@ func _update_footsteps(delta: float) -> void:
 	_step_dist += hspeed * delta
 	if _step_dist >= 2.4:
 		_step_dist = 0.0
-		_step_player.stream = FOOTSTEPS[randi() % FOOTSTEPS.size()]
-		_step_player.pitch_scale = randf_range(0.88, 1.12)
-		_step_player.play()
+		_play_step(-15.0, randf_range(0.88, 1.12))
 
 
 func take_damage(amount: float, attacker: Node3D = null) -> void:

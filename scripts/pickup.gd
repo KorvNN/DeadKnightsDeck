@@ -5,7 +5,8 @@ extends Node3D
 ## gibi oyuncuya uçar ve toplanır.
 
 const COIN_MODEL := "res://addons/kaykit_dungeon_remastered/assets/gltf/coin.gltf.glb"
-const SND_PICKUP := preload("res://assets/audio/sfx/ui_click.wav")
+const SND_GOLD := preload("res://assets/audio/interface/glass_001.ogg")   ## altın: parlak madeni "çın"
+const SND_XP := preload("res://assets/audio/interface/pluck_002.ogg")     ## XP: yumuşak emilim "blip"
 
 const COLLECT_DIST := 0.6
 const MAGNET_ACCEL := 26.0
@@ -110,9 +111,9 @@ func _collect() -> void:
 		Game.add_xp(value)
 
 	var snd := AudioStreamPlayer.new()
-	snd.stream = SND_PICKUP
-	snd.volume_db = -16.0
-	snd.pitch_scale = randf_range(1.5, 1.8) if kind == "gold" else randf_range(0.9, 1.1)
+	snd.stream = SND_GOLD if kind == "gold" else SND_XP
+	snd.volume_db = -14.0 if kind == "gold" else -13.0
+	snd.pitch_scale = randf_range(1.15, 1.35) if kind == "gold" else randf_range(0.95, 1.12)
 	get_tree().root.add_child(snd)
 	snd.play()
 	snd.finished.connect(snd.queue_free)

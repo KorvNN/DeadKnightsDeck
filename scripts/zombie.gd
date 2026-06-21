@@ -73,6 +73,7 @@ var voice_death: AudioStream = SND_DEATH
 @export var behavior := "melee"  ## melee / ranged / exploder
 @export var attack_logical := "Punch"  ## saldırı animasyonu (Punch/Slash/Cast)
 @export var tint := Color(0, 0, 0, 0)  ## a>0 ise zombi derisini bu renge boya
+@export var glow := Color(0, 0, 0, 0)  ## a>0 ise modele bu renkte parlama (boss: hayaletimsi okuma)
 # menzilli
 @export var ranged_range := 18.0  ## bu mesafeye kadar ateş eder
 @export var ranged_keep := 7.5  ## bundan yakına gelirse geri çekilir
@@ -82,6 +83,15 @@ var voice_death: AudioStream = SND_DEATH
 # patlayan
 @export var explode_radius := 3.6
 @export var explode_damage := 38.0
+# boss özel saldırısı: melee bosslar düz koşmasın → dönemsel mermi yelpazesi savurur
+@export var special_shots := 0       ## 0 = özel yok; >0: bu kadar mermilik yelpaze
+@export var special_cd := 6.0        ## özel saldırı arası bekleme
+@export var special_spread := 26.0   ## yelpaze toplam açısı (derece)
+@export var special_type := "nova"   ## skill türü: "nova" (360° patlama) / "volley" (oyuncuya nişanlı seri)
+@export var proj_style := "orb"      ## skill mermisi görseli: "orb" (küre) / "skull" (uçan kafatası)
+@export var proj_life := 7.0         ## skill mermisi ömrü (uzun → karşıya kadar gider)
+var skill_sound: AudioStream = null  ## skill anında çalan tematik ses (boss'a özel)
+var skill_burst_sound: AudioStream = null  ## volley'de ani üçlü patlama anının farklı sesi
 
 signal health_changed(health: float, max_health: float)
 
@@ -101,6 +111,11 @@ var _knockback := Vector3.ZERO  ## vuruşta geri itilme (sönümlenir)
 var _voice: AudioStreamPlayer3D
 var _groan_timer := 0.0
 var _vocal := false  ## sadece bazı zombiler ara ara homurdanır
+var _special_timer := 0.0  ## boss özel saldırı bekleme sayacı
+var _repath := 0.0  ## rota yeniden hesaplama seyreltme (her kare repath salınım/bug yapıyordu)
+var _stuck_t := 0.0  ## yerinde sayma süresi (sıkışma algısı)
+var _unstuck := 0.0  ## >0: kenara yalpalayarak köşeden/objeden kurtulma süresi
+var _last_pos := Vector3.ZERO  ## bir önceki kareki konum (ilerleme ölçümü)
 
 # özel mermi durumları (yakıcı/dondurucu)
 var _burn_dps := 0.0
@@ -150,14 +165,18 @@ func _ready() -> void:
 		voice_hurt = SKEL_HURT
 		voice_death = SKEL_DEATH
 
+	if glow.a > 0.0:
+		_apply_glow(model)  # modele renkli parlama (boss → hayaletimsi, kafataslarıyla uyumlu)
+
 	_voice = AudioStreamPlayer3D.new()
-	_voice.unit_size = 3.5
-	_voice.max_distance = 24.0
-	_voice.volume_db = -8.0
+	# boss sesi duyulur ama abartısız (silah/müzik altında boğulmasın, her yerden bağırmasın)
+	_voice.unit_size = 5.0 if is_boss else 3.5
+	_voice.max_distance = 34.0 if is_boss else 24.0
+	_voice.volume_db = 0.0 if is_boss else -8.0
 	_voice.position.y = 1.2
 	add_child(_voice)
-	_vocal = randf() < 0.45
-	_groan_timer = randf_range(4.0, 12.0)
+	_vocal = true if is_boss else randf() < 0.45  # boss HER ZAMAN sesli (sessiz boss olmaz)
+	_groan_timer = randf_range(1.5, 4.0) if is_boss else randf_range(4.0, 12.0)
 
 	if skip_rise:
 		# dramatik giriş: topraktan çıkış yok, yerinde belir ve hemen kovala
@@ -194,6 +213,21 @@ func _apply_zombie_skin(model: Node3D) -> void:
 				mesh.set_surface_override_material(i, m)
 
 
+func _apply_glow(model: Node3D) -> void:
+	## modelin tüm yüzeylerine renkli emission ekler (orijinal doku korunur, üstüne parlama)
+	## → boss karanlıkta hayaletimsi okunur, fırlattığı kafataslarıyla aynı paletten parlar
+	for mesh: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if mesh.mesh == null:
+			continue
+		for i in mesh.mesh.get_surface_count():
+			var base := mesh.mesh.surface_get_material(i)
+			var m: StandardMaterial3D = base.duplicate() if base is StandardMaterial3D else StandardMaterial3D.new()
+			m.emission_enabled = true
+			m.emission = Color(glow.r, glow.g, glow.b)
+			m.emission_energy_multiplier = glow.a * 1.4  # alfa = parlama şiddeti
+			mesh.set_surface_override_material(i, m)
+
+
 func _physics_process(delta: float) -> void:
 	if state == State.DEAD or player == null:
 		return
@@ -203,7 +237,22 @@ func _physics_process(delta: float) -> void:
 	_attack_timer = maxf(_attack_timer - delta, 0.0)
 	_hurt_cd = maxf(_hurt_cd - delta, 0.0)
 	_react_cd = maxf(_react_cd - delta, 0.0)
+	_special_timer = maxf(_special_timer - delta, 0.0)
+	_repath = maxf(_repath - delta, 0.0)
+	_unstuck = maxf(_unstuck - delta, 0.0)
 	_knockback = _knockback.move_toward(Vector3.ZERO, delta * 14.0)
+
+	# sıkışma algısı: kovalarken ilerlemek isteyip yerinde sayıyorsa kenara yalpala
+	if state == State.CHASE:
+		var expected := speed * _speed_mul * delta
+		if expected > 0.001 and global_position.distance_to(_last_pos) < expected * 0.35:
+			_stuck_t += delta
+			if _stuck_t > 0.3:
+				_unstuck = 0.55
+				_stuck_t = 0.0
+		else:
+			_stuck_t = 0.0
+	_last_pos = global_position
 
 	# yakıcı/dondurucu mermi durumları
 	if _burn_time > 0.0 or _chill_time > 0.0:
@@ -225,8 +274,13 @@ func _physics_process(delta: float) -> void:
 	if _vocal and (state == State.CHASE or state == State.ATTACK):
 		_groan_timer -= delta
 		if _groan_timer <= 0.0:
-			_groan_timer = randf_range(9.0, 20.0)
-			_say(voice_groan, 0.82, 1.18)
+			if is_boss:
+				# boss kovalarken sık + pes homurdanır → sürekli tehdit/korku hissi
+				_groan_timer = randf_range(3.0, 6.0)
+				_say(voice_groan, 0.72, 0.86, true)
+			else:
+				_groan_timer = randf_range(9.0, 20.0)
+				_say(voice_groan, 0.82, 1.18)
 
 	if state == State.SPAWNING:
 		velocity.x = 0.0
@@ -246,6 +300,17 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		return
 
+	# boss özel saldırısı: belirli aralıkla durur, oyuncuya mermi yelpazesi savurur (düz koşmaz)
+	# menzil farketmez (yapışıkken bile atar) — yalnız görüş hattı + bekleme dolmuş olmalı
+	# nova 360° → görüş hattı gerekmez (sütun arkasından da atar)
+	if is_boss and special_shots > 0 and _special_timer == 0.0 \
+			and state != State.ATTACK and dist <= 34.0:
+		velocity.x = 0.0
+		velocity.z = 0.0
+		_boss_special()
+		move_and_slide()
+		return
+
 	if dist <= attack_range:
 		velocity.x = 0.0
 		velocity.z = 0.0
@@ -253,11 +318,7 @@ func _physics_process(delta: float) -> void:
 			_attack()
 	elif state != State.ATTACK or not anim.is_playing():
 		state = State.CHASE
-		agent.target_position = player.global_position
-		var next := agent.get_next_path_position()
-		var dir := next - global_position
-		dir.y = 0.0
-		dir = dir.normalized()
+		var dir := _chase_dir(to_player)
 		velocity.x = dir.x * speed * _speed_mul
 		velocity.z = dir.z * speed * _speed_mul
 		if anim.current_animation != _anim["Run"]:
@@ -266,6 +327,26 @@ func _physics_process(delta: float) -> void:
 	velocity.x += _knockback.x
 	velocity.z += _knockback.z
 	move_and_slide()
+
+
+func _chase_dir(to_player: Vector3) -> Vector3:
+	## kovalama yönü: navmesh rotasını izle; rota biterse/bozuksa doğrudan
+	## oyuncuya yönel; fiziksel sıkışma varsa yana yalpalayarak köşeden kurtul.
+	if _repath <= 0.0:  # rotayı her kare değil ~0.25 sn'de bir hesapla (salınım/bug önler)
+		_repath = 0.25
+		agent.target_position = player.global_position
+	var beeline := to_player.normalized()
+	var dir := beeline
+	if not agent.is_navigation_finished():
+		var next := agent.get_next_path_position()
+		var nd := next - global_position
+		nd.y = 0.0
+		if nd.length() > 0.05:  # rota düğümü dejenere değilse onu izle
+			dir = nd.normalized()
+	if _unstuck > 0.0:  # sıkıştık → hedefe doğru ama bir yana kayarak duvar/obje boyunca süzül
+		var perp := Vector3(-beeline.z, 0.0, beeline.x)
+		dir = (dir + perp * 1.3).normalized()
+	return dir
 
 
 func _ranged_step(to_player: Vector3, dist: float) -> void:
@@ -285,11 +366,7 @@ func _ranged_step(to_player: Vector3, dist: float) -> void:
 			anim.play(run)
 	elif dist > ranged_range or not _has_los():
 		state = State.CHASE
-		agent.target_position = player.global_position
-		var next := agent.get_next_path_position()
-		var dir := next - global_position
-		dir.y = 0.0
-		dir = dir.normalized()
+		var dir := _chase_dir(to_player)
 		velocity.x = dir.x * speed * _speed_mul
 		velocity.z = dir.z * speed * _speed_mul
 		if anim.current_animation != run:
@@ -333,6 +410,84 @@ func _shoot() -> void:
 	await get_tree().create_timer(0.3).timeout
 	if state == State.ATTACK:
 		state = State.CHASE
+
+
+func _boss_special() -> void:
+	## boss skill: durup özel saldırı yapar (düz koşmaya alternatif tehdit).
+	## türe göre dallanır: "nova" 360° patlama / "volley" oyuncuya nişanlı seri atış.
+	state = State.ATTACK
+	_attack_timer = attack_cooldown
+	_special_timer = special_cd
+	anim.play(_anim.get(attack_logical, _anim.get("Punch", _anim["Run"])))
+	_play_skill_sound()  # tematik "skill" sesi (boss'a özel)
+	await get_tree().create_timer(0.55).timeout
+	if state == State.DEAD or player == null:
+		return
+	if special_type == "volley":
+		await _special_volley()
+	else:
+		_special_nova()
+	await get_tree().create_timer(0.35).timeout
+	if state == State.ATTACK:
+		state = State.CHASE
+
+
+func _play_skill_sound() -> void:
+	## skill'e özel ses; tanımlı değilse pes, tehditkâr dövüş sesine düşer
+	if skill_sound != null:
+		_say(skill_sound, 0.92, 1.04, true)
+	else:
+		_say(voice_attack, 0.66, 0.82, true)
+
+
+func _spawn_enemy_proj(origin: Vector3, dir: Vector3, scale := 1.0) -> void:
+	var proj := PROJECTILE.new()
+	proj.damage = projectile_damage
+	proj.velocity = dir * projectile_speed
+	proj.color = projectile_color
+	proj.style = proj_style
+	proj.life = proj_life
+	get_parent().add_child(proj)
+	proj.global_position = origin + dir * 1.6
+	proj.scale = Vector3.ONE * scale
+
+
+func _special_nova() -> void:
+	## DAİRESEL NOVA (bahçıvan): 360° dışa açılan iri yavaş spor mermileri → her yöne kaçılır
+	var origin := global_position + Vector3(0, 1.3, 0)
+	for i in special_shots:
+		var ang := TAU * float(i) / float(special_shots)
+		_spawn_enemy_proj(origin, Vector3(cos(ang), 0.0, sin(ang)), 1.7)
+
+
+func _special_volley() -> void:
+	## NİŞANLI SERİ (iskelet lord): oyuncuya kafatası fırlatır — çoğunlukla TEK TEK nişanlı,
+	## ama ara ara BİR ANDA 3 kafatasını üst üste savurur (ayrı, daha sert bir ses) →
+	## ritmi bozan, kaçması zor "yoğunluk anları" yaratır. Kafatasları karşıya kadar gider.
+	var spread := deg_to_rad(special_spread) * 0.5
+	for i in special_shots:
+		if state == State.DEAD or player == null:
+			return
+		var origin := global_position + Vector3(0, 1.3, 0)
+		var target := player.global_position + Vector3(0, 1.0, 0)
+		var base_dir := (target - origin).normalized()
+		var triple := i > 0 and i % 3 == 0  # her 3. atışta ani üçlü salvo
+		if triple:
+			# ani 3'lü: sıkı yelpazeyle üst üste, farklı (daha sert) ses
+			if skill_burst_sound != null:
+				_say(skill_burst_sound, 0.92, 1.02, true)
+			else:
+				_say(voice_attack, 0.7, 0.8, true)
+			for j in 3:
+				var off := deg_to_rad(11.0) * (j - 1)  # -11°, 0°, +11°
+				_spawn_enemy_proj(origin, base_dir.rotated(Vector3.UP, off), 1.3)
+			await get_tree().create_timer(0.5).timeout  # salvo sonrası kısa nefes
+		else:
+			var dir := base_dir.rotated(Vector3.UP, randf_range(-spread, spread))
+			_spawn_enemy_proj(origin, dir, 1.15)
+			if i % 2 == 0:  # atlamalı kısa kemik takırtısı (takırtı spam'i olmasın)
+				_say(voice_attack, 1.05, 1.2)
+			await get_tree().create_timer(0.22).timeout
 
 
 func _attack() -> void:
@@ -582,7 +737,7 @@ func take_damage(amount: float, _headshot := false) -> void:
 	# hurt sesi: aralıklı ve kendini kesmeden (ağaağa spam'i biter)
 	if _hurt_cd <= 0.0:
 		_hurt_cd = randf_range(0.45, 0.7)
-		_say(voice_hurt, 0.92, 1.15)
+		_say(voice_hurt, 0.92, 1.15, is_boss)  # boss: vuruşta sesi kesip mutlaka inle
 
 
 func _blood_burst() -> void:

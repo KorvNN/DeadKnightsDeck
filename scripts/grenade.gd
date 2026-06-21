@@ -6,6 +6,13 @@ extends Node3D
 const GRAVITY := 18.0
 const EXPLOSION := preload("res://assets/audio/sfx/explosion.wav")
 const FIRE_SND := preload("res://assets/audio/sfx/fire_ignite.wav")
+const THROW_SND := preload("res://assets/audio/sfx/grenade_throw.wav")
+const BOUNCE_SND := [
+	preload("res://assets/audio/impact/impactMetal_light_000.ogg"),
+	preload("res://assets/audio/impact/impactMetal_light_002.ogg"),
+	preload("res://assets/audio/impact/impactMetal_light_004.ogg"),
+]
+var _bounce_cd := 0.0  ## sekme sesi spam'ini önler
 
 var velocity := Vector3.ZERO
 var fuse := 1.4
@@ -39,10 +46,13 @@ func _ready() -> void:
 	_light.light_energy = 0.0
 	add_child(_light)
 
+	_play(THROW_SND, 0.7, randf_range(0.95, 1.08))  # fırlatma hışırtısı
+
 
 func _physics_process(delta: float) -> void:
 	if _state != "fly":
 		return
+	_bounce_cd = maxf(_bounce_cd - delta, 0.0)
 	fuse -= delta
 	_light.light_energy = 1.6 if fmod(fuse, 0.24) < 0.1 else 0.0  # yanıp sönen fitil
 
@@ -55,7 +65,12 @@ func _physics_process(delta: float) -> void:
 	if hit:
 		var n: Vector3 = hit.normal
 		global_position = hit.position + n * 0.12
+		var impact_speed := velocity.length()
 		velocity = velocity.bounce(n) * 0.42  # sekme + sönüm
+		if impact_speed > 3.8 and _bounce_cd <= 0.0:  # yalnız SERT çarpmada, kısık tıngırtı
+			_bounce_cd = 0.25
+			_play(BOUNCE_SND[randi() % BOUNCE_SND.size()],
+					clampf(impact_speed / 20.0, 0.12, 0.4), randf_range(0.85, 1.05))
 	else:
 		global_position = to
 

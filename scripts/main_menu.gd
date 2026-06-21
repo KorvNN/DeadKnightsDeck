@@ -159,14 +159,14 @@ func _build_background() -> void:
 	# --- ateşin başında taburede oturan yorgun şövalye ---
 	# ayakları ateş taşlarına girmesin diye ateşten biraz geriye/sağa alındı,
 	# ayaklar açık zemine denk gelir (SitDown'da ayaklar +Z yönünde önde).
-	var fig_pos := Vector3(2.55, -0.01, -5.0)
+	var fig_pos := Vector3(2.55, 0.11, -4.75)
 	_place(world, "stool.gltf.glb", Vector3(fig_pos.x + 0.13, 0, fig_pos.z - 0.36), -20.0)
 	_fig = (load(KNIGHT_MODEL) as PackedScene).instantiate()
 	_fig.scale = Vector3.ONE * 0.9
 	_fig.position = fig_pos
 	# GLTF modelin doğal yüzü +Z. Ateş sol-önde → hafif sola dönük ateşe bakar.
 	_fig.rotation_degrees.y = -20.0
-	_fig_rot = -6.0                   # geriye, duvara yaslanmış yorgun duruş
+	_fig_rot = -3.0                   # hafif geriye yaslanmış yorgun duruş (boynuz duvara girmesin)
 	world.add_child(_fig)
 	var fig_anim: AnimationPlayer = _fig.find_child("AnimationPlayer", true, false)
 	if fig_anim and fig_anim.has_animation("SitDown"):
@@ -202,9 +202,9 @@ func _build_background() -> void:
 	# yaw 200 → namlu ucu kameraya (ekrana) dönük, ateşten uzak
 	_place_weapon(world, "Rifle.fbx", Vector3(3.0, 0, -4.25), Vector3(0, 200, 0), 0.3)
 	_place_weapon(world, "Shotgun.fbx", Vector3(1.55, 0, -5.25), Vector3(72, 10, 90), 0.3)
-	# Tabanca: ateşin sağında açık zeminde (tabanca modeli içsel ~4x büyük → 0.07)
+	# Tabanca: sağ-önde açık zeminde — menü butonlarının altında kalmasın (eskiden x=0.8 merkezde kalıyordu)
 	# rotX=90 → yan yatar (dik durmasın/havada görünmesin), uzun ekseni lokal X
-	_place_weapon(world, "Pistol.fbx", Vector3(0.8, 0.08, -3.35), Vector3(90, -35, 0), 0.07)
+	_place_weapon(world, "Pistol.fbx", Vector3(2.35, 0.08, -3.5), Vector3(90, -35, 0), 0.07)
 
 
 func _build_campfire(world: Node3D, pos: Vector3) -> void:

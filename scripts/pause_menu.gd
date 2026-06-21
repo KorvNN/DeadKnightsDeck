@@ -203,14 +203,14 @@ func _fill_stats(player: Node, weapon: Node) -> void:
 	split.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_stats_tab.add_child(split)
 
-	# --- KARAKTER: silahını tutan zombi, solda boylamasına yeşil borderli kutu ---
+	# --- KARAKTER: altın şövalye, solda boylamasına altın borderli kutu ---
 	if weapon != null:
 		var cv: SubViewportContainer = CHAR_VIEW.new()
 		cv.setup(weapon)
 		cv.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var panel := PanelContainer.new()
-		panel.custom_minimum_size = Vector2(250, 440)
-		panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		panel.custom_minimum_size = Vector2(220, 420)
+		panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.08, 0.1, 0.09)
 		sb.border_color = MenuUI.GOLD

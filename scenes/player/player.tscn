@@ -120,7 +120,7 @@ omni_range = 6.0
 
 [node name="ShootSfx" type="AudioStreamPlayer" parent="Camera/Gun"]
 stream = ExtResource("10")
-volume_db = -14.0
+volume_db = -9.0
 
 [node name="HitSfx" type="AudioStreamPlayer" parent="Camera/Gun"]
 stream = ExtResource("11")

@@ -90,6 +90,11 @@ var _boss_bar: ProgressBar
 var _boss_name := ""
 var _arena_size := Vector2.ZERO  ## boss alanının (x, z) boyutu
 var _gate_pos := Vector3.ZERO    ## boss ölünce portalın doğacağı nokta
+
+# dinamik müzik (normal savaş katları): yakında düşman varken yoğun, sakinken keşif
+var _music_managed := false      ## bu katta explore↔combat geçişi yönetilsin mi
+var _combat_hold := 0.0          ## son tehditten sonra savaş müziğini tutma sayacı
+var _threat_check := 0.0         ## tehdit taramasını seyreltme sayacı
 var _gate_leaves: Array[Node3D] = []  ## kemer kapı kanatları (arkadan kapanır)
 var _gate_leaf_cols: Array[Node] = []
 var _gate_body: StaticBody3D
@@ -114,6 +119,9 @@ func _ready() -> void:
 
 	player = get_tree().get_first_node_in_group("player")
 	player.died.connect(_on_player_died)
+	if player.has_method("set_footstep_surface"):
+		# bahçe biome'ları çim, kalan taş zemin (mahzen/şato/ahiret)
+		player.set_footstep_surface("grass" if _biome in ["garden", "garden_boss"] else "concrete")
 
 	# el feneri zindan içindir; gün ışığında yakındaki açık taşları patlatıp
 	# gökyüzüne karıştırıyor (kemer görünmezliği bu yüzdendi)
@@ -134,6 +142,8 @@ func _ready() -> void:
 	if _biome == "heaven" or _biome == "hell":
 		_build_afterlife(_biome)
 		return
+
+	_music_managed = true  # normal savaş katı: müzik düşman yakınlığına göre dinamik
 
 	var grow := mini(Game.biome_stage() - 1, 4) + (2 if _biome == "castle" else 0)
 	maze = MazeGen.generate(maze_w + grow, maze_h + grow, rng.randi(), 0.25)
@@ -1312,6 +1322,11 @@ func _scatter(rect: Rect2i) -> Vector3:
 	return Vector3(rng.randf_range(-hw, hw), 0, (hh if rng.randf() < 0.5 else -hh))
 
 
+## alçak mobilya (masa/sandalye/yatak/fıçı/mezar...) çarpışmasız kalsın → mermi/skill
+## üstünden geçer, düşman takılmaz. SADECE belden yüksek proplar (raf/ağaç/dik tabut)
+## ince silindir çarpışmayla engeller (kolon gibi davranır, köşeye sıkıştırmaz).
+const PROP_SOLID_MIN_H := 1.7  ## bu yükseklikten alçak proplar tamamen geçirgen
+
 func _spawn_prop(piece_file: String, pos: Vector3, rot: float) -> void:
 	var body := StaticBody3D.new()
 	nav.add_child(body)
@@ -1320,12 +1335,15 @@ func _spawn_prop(piece_file: String, pos: Vector3, rot: float) -> void:
 	var model := _spawn_piece(piece_file, body)
 	model.position = Vector3.ZERO
 
-	# collision'ı modelin gerçek AABB'sine göre boyutla (içine girilemesin)
 	var aabb := _local_aabb(body, model)
+	if aabb.size.y < PROP_SOLID_MIN_H:
+		return  # alçak dekor: salt görsel, çarpışma yok (skill engellenmez, mob takılmaz)
+	# yüksek prop: ince DİKEY SİLİNDİR → etrafından akıcı dolanılır, kutu köşesine takılmaz
 	var col := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(maxf(aabb.size.x, 0.4), maxf(aabb.size.y, 0.6), maxf(aabb.size.z, 0.4))
-	col.shape = box
+	var cyl := CylinderShape3D.new()
+	cyl.height = aabb.size.y
+	cyl.radius = minf(maxf(aabb.size.x, aabb.size.z) * 0.5, 0.45)
+	col.shape = cyl
 	col.position = aabb.position + aabb.size * 0.5
 	body.add_child(col)
 
@@ -1637,17 +1655,47 @@ func _update_quota_label() -> void:
 		_quota_label.add_theme_color_override("font_color", Color(0.95, 0.55, 0.4))
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _intro_active:
 		if _intro_can_dismiss and Input.is_action_just_pressed("interact"):
 			_dismiss_story_intro()
 		return
+	_update_combat_music(delta)
 	if _exit_near and _exit_unlocked and not _stage_over \
 			and Input.is_action_just_pressed("interact"):
 		_finish_stage()
 	if _portal_near != "" and not _choice_made \
 			and Input.is_action_just_pressed("interact"):
 		_on_choice_portal(_portal_near)
+
+
+func _update_combat_music(delta: float) -> void:
+	## yakında düşman varken yoğun savaş müziği, sakinken keşif müziği (yumuşak geçiş)
+	if not _music_managed or _stage_over:
+		return
+	_threat_check -= delta
+	if _threat_check <= 0.0:
+		_threat_check = 0.3
+		if _enemy_threat():
+			_combat_hold = 6.0  # son tehditten sonra savaş müziğini 6 sn tut (sürekli yanıp sönmesin)
+	_combat_hold = maxf(_combat_hold - delta, 0.0)
+	# play_* çağrıları aynı parçada no-op (crossfade guard) → her karede çağırmak güvenli
+	if _combat_hold > 0.0:
+		Music.play_game()
+	else:
+		Music.play_explore()
+
+
+func _enemy_threat() -> bool:
+	## oyuncuya ~16 m içinde canlı düşman var mı → yakın tehdit (gerilim)
+	if player == null:
+		return false
+	var pp: Vector3 = player.global_position
+	for e in get_tree().get_nodes_in_group("enemy"):
+		var n := e as Node3D
+		if n != null and is_instance_valid(n) and n.global_position.distance_to(pp) <= 16.0:
+			return true
+	return false
 
 
 func _on_exit_near(body: Node3D, near: bool) -> void:
@@ -1842,10 +1890,16 @@ func _build_boss_arena() -> void:
 				Color(0.55, 0.9, 0.45), SND_BOSS_GROAN)
 		if not _stage_over:
 			_spawn_boss(Vector3(w / 2.0, 0.1, 9.0), {
-				"hp": 1200.0, "speed": 2.3, "damage": 24.0, "range": 3.2,
+				"hp": 1200.0, "speed": 3.0, "damage": 24.0, "range": 3.2,
 				"cooldown": 1.7, "xp": 350, "gold": 160, "scale": 1.5,
 				"roar_pitch": 1.0, "fx_color": Color(0.55, 0.9, 0.45),
 				"entrance": "garden", "roar": SND_BOSS_GROAN,
+				# skill: 8'li zehirli ŞİŞE NOVASI (360° dışa açılır) — ıslak çamur/spor sesi
+				# (mekanik aynı; mermi görseli düz küre yerine dönen yeşil zehir şişesi)
+				"special_shots": 8, "special_cd": 5.0, "special_type": "nova",
+				"skill_sound": SND_BOSS_SQUELCH, "proj_style": "potion", "proj_life": 8.0,
+				"proj_dmg": 16.0, "proj_speed": 10.0, "proj_color": Color(0.5, 0.85, 0.3),
+				"glow": Color(0.4, 0.85, 0.3, 0.85),  # zehir yeşili parlama (şişeleriyle uyumlu)
 			})
 
 
@@ -1900,6 +1954,19 @@ func _spawn_boss(pos: Vector3, cfg: Dictionary) -> void:
 	_boss.attack_cooldown = cfg.get("cooldown", 1.7)
 	_boss.xp_value = cfg.get("xp", 350)
 	_boss.gold_value = cfg.get("gold", 160)
+	# özel saldırı (skill): melee boss düz koşmasın, dönemsel mermi yelpazesi savursun
+	_boss.special_shots = cfg.get("special_shots", 0)
+	_boss.special_cd = cfg.get("special_cd", 6.0)
+	_boss.special_spread = cfg.get("special_spread", 26.0)
+	_boss.special_type = cfg.get("special_type", "nova")
+	_boss.skill_sound = cfg.get("skill_sound", null)
+	_boss.skill_burst_sound = cfg.get("skill_burst_sound", null)
+	_boss.proj_style = cfg.get("proj_style", "orb")
+	_boss.proj_life = cfg.get("proj_life", 7.0)
+	_boss.glow = cfg.get("glow", Color(0, 0, 0, 0))
+	_boss.projectile_damage = cfg.get("proj_dmg", _boss.projectile_damage)
+	_boss.projectile_speed = cfg.get("proj_speed", _boss.projectile_speed)
+	_boss.projectile_color = cfg.get("proj_color", _boss.projectile_color)
 	if cfg.has("voice"):  # boss'a özel dövüş sesi seti (iskelet: kemik takırtısı)
 		var v: Dictionary = cfg["voice"]
 		_boss.voice_groan = v.get("groan", _boss.voice_groan)
@@ -1953,6 +2020,8 @@ func _on_boss_health(health: float, max_health: float) -> void:
 		_stage_label.add_theme_color_override("font_color", Color(1.0, 0.4, 0.3))
 		if _biome == "cerberus":
 			_cerberus_enrage()
+		else:
+			_play_enrage_audio()
 
 
 func _summon_minions() -> void:
@@ -1993,9 +2062,32 @@ func _summon_minions() -> void:
 			z.gold_value = 8
 		add_child(z)
 		var ang := rng.randf() * TAU
-		z.global_position = Vector3(cx + cos(ang) * ring, 0.6, cz + sin(ang) * ring)
+		# halka noktasını yürünür navmesh'e oturt → süs/engel içine doğup sıkışmasınlar
+		var spot := Vector3(cx + cos(ang) * ring, 0.6, cz + sin(ang) * ring)
+		spot = NavigationServer3D.map_get_closest_point(nav.get_navigation_map(), spot)
+		z.global_position = spot + Vector3(0, 0.4, 0)
 		_alive += 1
 		z.died.connect(_on_zombie_died)
+
+
+func _play_enrage_audio() -> void:
+	## boss öfkelenince: yüze yakın yüksek kükreme + alttan derin gümbürtü → ani korku/tehdit
+	var roar: AudioStream = SND_BOSS_GROAN if _biome == "garden_boss" else SND_BOSS_ROAR
+	_boss_one_shot(roar, 2.0, 0.82)        # yüksek + pes perdeli → daha iri, öfkeli
+	_boss_one_shot(SND_BOSS_RUMBLE, -1.0)  # alttan gümbürtü → tehdit hissi
+
+
+func _boss_one_shot(stream: AudioStream, db: float, pitch := 1.0) -> void:
+	## konumsuz (yüze yakın) tek-atış ses — boss anları için
+	if stream == null:
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = stream
+	p.volume_db = db
+	p.pitch_scale = pitch
+	add_child(p)
+	p.play()
+	p.finished.connect(p.queue_free)
 
 
 func _on_boss_died() -> void:
@@ -2085,9 +2177,10 @@ func _build_castle_hall() -> void:
 			var pillar := _spawn_piece("pillar.gltf.glb", nav)
 			pillar.position = Vector3(px, 0, pz)
 			var col := CollisionShape3D.new()
-			var box := BoxShape3D.new()
-			box.size = Vector3(1.2, WALL_H, 1.2)
-			col.shape = box
+			var cyl := CylinderShape3D.new()  # silindir: kolon engeller ama köşeye sıkıştırmaz
+			cyl.height = WALL_H
+			cyl.radius = 0.6
+			col.shape = cyl
 			col.position = Vector3(px, WALL_H / 2.0, pz)
 			walls_body.add_child(col)
 			# her iç sütunun tepesinde sıcak ışık kazanı — salon artık karanlık değil
@@ -2181,9 +2274,16 @@ func _build_castle_hall() -> void:
 		if not _stage_over:
 			_spawn_boss(Vector3(cxm, 0.1, 8.0), {
 				"model": SKELETON_WARRIOR, "base": SKELETON_BASE_SCALE, "scale": 1.8,
-				"hp": 2400.0, "speed": 2.6, "damage": 30.0, "range": 3.4,
+				"hp": 2400.0, "speed": 3.2, "damage": 30.0, "range": 3.4,
 				"cooldown": 1.5, "xp": 600, "gold": 320,
 				"roar_pitch": 0.82, "fx_color": Color(0.6, 0.82, 1.0),
+				# skill: oyuncuya UÇAN KAFATASLARI — çoğu tek tek nişanlı, ara ara ani 3'lü salvo
+				# (farklı sert ses). Kafatasları karşıya kadar gider, hemen yok olmaz.
+				"special_shots": 9, "special_cd": 4.5, "special_type": "volley", "special_spread": 18.0,
+				"skill_sound": SND_BOSS_RUMBLE, "skill_burst_sound": SND_BOSS_ROAR,
+				"proj_style": "skull", "proj_life": 9.0,
+				"proj_dmg": 15.0, "proj_speed": 15.0, "proj_color": Color(0.75, 0.88, 1.0),
+				"glow": Color(0.35, 0.72, 1.0, 1.1),  # buz mavisi hayalet parlama (kafataslarıyla uyumlu)
 			})
 
 
@@ -2951,26 +3051,32 @@ func _build_water_features(w: float) -> void:
 	## + collision → oyuncu giremez). Görünür taş set YOK. Orta köprü boss'un tam karşısında
 	## (x=w/2) → boss düz koşar, engele takılmaz; geçişler yalnız köprülerden.
 	var cx := w * 0.5
-	var cz := w * 0.5            # akıntı orta hatta
-	var half := 0.75            # dar akıntı yarı genişliği (su "akıntısı")
-	var block_half := 1.0       # görünmez engel yarı genişliği (sudan biraz geniş)
+	var cz := w * 0.5            # akıntı orta hatta (kanal satırı bu z'de)
+	var half := 0.95            # kanal yarı genişliği (oyuk)
+	var block_half := 1.0       # görünmez engel yarı genişliği
 	var bridges: Array[float] = [w * 0.22, w * 0.5, w * 0.78]  # ORTA köprü boss'un karşısında
-	var bridge_hw := 3.0        # köprü yarı genişliği
-	var gap := 3.2              # engel boşluğu yarısı (köprü altı tamamen açık)
+	var bridge_hw := 2.2        # köprü yarı genişliği (x)
+	var gap := 3.0              # köprü çevresinde engel boşluğu
+	var row_half := CELL * 0.5  # atlanan zemin satırının yarı derinliği (z)
+	var bed_y := -0.85          # çukur dibi
+	var water_y := -0.30        # su yüzeyi (zeminin AÇIKÇA altında → oyuk okunur)
 
 	var water_mat := StandardMaterial3D.new()
-	water_mat.albedo_color = Color(0.12, 0.4, 0.62, 0.72)  # yarı saydam → zemin "yatak" gibi görünür
-	water_mat.metallic = 0.5
-	water_mat.roughness = 0.04
+	water_mat.albedo_color = Color(0.05, 0.32, 0.66, 0.82)  # belirgin mavi, yarı saydam
+	water_mat.metallic = 0.2
+	water_mat.roughness = 0.1
 	water_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	water_mat.emission_enabled = true
-	water_mat.emission = Color(0.12, 0.34, 0.55)
-	water_mat.emission_energy_multiplier = 0.3
+	water_mat.emission = Color(0.03, 0.16, 0.38)
+	water_mat.emission_energy_multiplier = 0.22
 	var bed_mat := StandardMaterial3D.new()
-	bed_mat.albedo_color = Color(0.07, 0.09, 0.12)  # koyu ıslak yatak
+	bed_mat.albedo_color = Color(0.04, 0.06, 0.09)  # koyu ıslak dip
 	bed_mat.roughness = 1.0
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color(0.30, 0.30, 0.34)
+	var wall_mat := StandardMaterial3D.new()  # çukur taş duvar yüzleri
+	wall_mat.albedo_color = Color(0.16, 0.16, 0.19)
+	wall_mat.roughness = 0.95
+	var stone := StandardMaterial3D.new()     # köprü tabanı + yan zemin şeritleri
+	stone.albedo_color = Color(0.32, 0.31, 0.34)
 	stone.roughness = 0.9
 
 	# yalnız görsel (navmesh/collision yok) — self altına
@@ -2982,6 +3088,16 @@ func _build_water_features(w: float) -> void:
 		mi.mesh = b
 		mi.position = pos
 		add_child(mi)
+
+	# görünür + navmesh (yürünür yüzey); ayrı collision yok — büyük zemin kutusu zaten y=0'da
+	var add_navtop := func(size: Vector3, pos: Vector3, mat: StandardMaterial3D) -> void:
+		var mi := MeshInstance3D.new()
+		var b := BoxMesh.new()
+		b.size = size
+		b.material = mat
+		mi.mesh = b
+		mi.position = pos
+		nav.add_child(mi)
 
 	# GÖRÜNMEZ engel: visible=false mesh (bake'te navmesh engeli) + StaticBody collision (oyuncu geçemez)
 	var add_block := func(size: Vector3, pos: Vector3) -> void:
@@ -3035,9 +3151,17 @@ func _build_water_features(w: float) -> void:
 	if w - 0.3 > seg_a:
 		segments.append([seg_a, w - 0.3])
 
-	# koyu ıslak yatak (zemine gömülü) + üstünde yarı saydam ince su tabakası (boydan boya)
-	add_box.call(Vector3(w, 0.10, half * 2.0), Vector3(cx, -0.03, cz), bed_mat)
-	add_box.call(Vector3(w, 0.06, half * 2.0 - 0.1), Vector3(cx, 0.02, cz), water_mat)
+	# atlanan kanal satırının yerine iki yan zemin şeridi (çukurun iki yakası, zeminle hizalı)
+	var strip_depth := row_half - half
+	for sgn: float in [-1.0, 1.0]:
+		var sc := cz + sgn * (half + strip_depth * 0.5)
+		add_navtop.call(Vector3(w, 0.18, strip_depth), Vector3(cx, -0.09, sc), stone)
+
+	# ÇUKUR: koyu dip + zeminin altında mavi su + iki carve duvar yüzü (oyuk gibi görünsün)
+	add_box.call(Vector3(w, 0.12, half * 2.0), Vector3(cx, bed_y, cz), bed_mat)             # dip
+	add_box.call(Vector3(w, 0.04, half * 2.0 - 0.06), Vector3(cx, water_y, cz), water_mat)  # su yüzeyi
+	for sgn: float in [-1.0, 1.0]:
+		add_box.call(Vector3(w, -bed_y, 0.06), Vector3(cx, bed_y * 0.5, cz + sgn * half), wall_mat)
 
 	# görünmez engel: köprü boşlukları hariç tüm kanalı kaplar (suya girilemez, etrafından dolanılamaz)
 	for seg: Array in segments:
@@ -3046,46 +3170,64 @@ func _build_water_features(w: float) -> void:
 		add_block.call(Vector3(s1 - s0, 2.0, block_half * 2.0),
 				Vector3((s0 + s1) * 0.5, 1.0, cz))
 
-	# 3 köprü: düz döşeme (navmesh'te yürünür, kuzey-güneyi bağlar) + görsel korkuluk
-	var deck_z := half * 2.0 + 2.6
+	# 3 ahşap köprü: çapraz tahta döşeme + yan kirişler + ahşap korkuluk (kuzey-güneyi bağlar)
+	var wood_a := StandardMaterial3D.new()
+	wood_a.albedo_color = Color(0.40, 0.26, 0.14)
+	wood_a.roughness = 0.92
+	var wood_b := StandardMaterial3D.new()
+	wood_b.albedo_color = Color(0.30, 0.19, 0.10)
+	wood_b.roughness = 0.95
+	var wood_dk := StandardMaterial3D.new()
+	wood_dk.albedo_color = Color(0.22, 0.14, 0.08)
+	wood_dk.roughness = 1.0
+	# DÜZ döşeme: üst yüzey y≈0.02 (zeminle hizalı) → iki yakaya biner, zıplamadan geçilir
+	var deck_z := row_half * 2.0 + 0.4
 	for bx: float in bridges:
-		add_deck.call(Vector3(bridge_hw * 2.0, 0.18, deck_z), Vector3(bx, 0.09, cz))
+		add_deck.call(Vector3(bridge_hw * 2.0, 0.16, deck_z), Vector3(bx, -0.06, cz))
+		# çapraz tahtalar (yürüme yönüne dik), hafif renk değişimiyle
+		var plank_w := 0.32
+		var pcount := int(deck_z / (plank_w + 0.04))
+		var pz0 := cz - deck_z * 0.5 + plank_w * 0.6
+		for i in pcount:
+			add_box.call(Vector3(bridge_hw * 2.0 - 0.06, 0.05, plank_w),
+					Vector3(bx, 0.035, pz0 + i * (plank_w + 0.04)), wood_a if i % 2 == 0 else wood_b)
+		# yan kirişler (çukura sarkan) + ahşap korkuluk
 		for s: float in [-1.0, 1.0]:
-			# köprü kenar korkuluğu (doğu-batı boyu; yürüyüşü engellemez)
-			add_box.call(Vector3(0.2, 0.7, deck_z), Vector3(bx + s * (bridge_hw - 0.2), 0.45, cz), stone)
-			# korkuluk babaları (dört köşe)
-			for ez: float in [-1.0, 1.0]:
-				add_box.call(Vector3(0.36, 0.95, 0.36),
-						Vector3(bx + s * (bridge_hw - 0.2), 0.55, cz + ez * (deck_z * 0.5 - 0.2)), stone)
+			add_box.call(Vector3(0.14, 0.5, deck_z), Vector3(bx + s * (bridge_hw - 0.05), -0.2, cz), wood_dk)
+			var rail_x := bx + s * (bridge_hw - 0.16)
+			for k in 4:
+				var pz := cz - deck_z * 0.5 + 0.3 + k * (deck_z - 0.6) / 3.0
+				add_box.call(Vector3(0.12, 0.95, 0.12), Vector3(rail_x, 0.52, pz), wood_dk)
+			add_box.call(Vector3(0.10, 0.10, deck_z), Vector3(rail_x, 0.96, cz), wood_a)  # üst el rayı
+			add_box.call(Vector3(0.06, 0.06, deck_z), Vector3(rail_x, 0.62, cz), wood_b)  # orta ray
 
-	# akıntı köpüğü: SADECE su segmentlerinde (köprülerin üstünde partikül olmaz)
+	# akıntı köpüğü: çukurun içinde, küçük mavi-beyaz damlacıklar (kocaman beyaz köpük değil)
 	var framp := Gradient.new()
-	framp.set_color(0, Color(0.85, 0.95, 1.0, 0.0))
-	framp.add_point(0.2, Color(0.9, 0.97, 1.0, 0.6))
-	framp.set_color(1, Color(0.7, 0.85, 1.0, 0.0))
+	framp.set_color(0, Color(0.55, 0.75, 0.95, 0.0))
+	framp.add_point(0.25, Color(0.78, 0.9, 1.0, 0.65))
+	framp.set_color(1, Color(0.45, 0.7, 0.95, 0.0))
 	var fm := StandardMaterial3D.new()
 	fm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	fm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	fm.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES  # ADD yok → parlak beyaz top olmaz
 	for seg: Array in segments:
 		var s0: float = seg[0]
 		var s1: float = seg[1]
 		if s1 - s0 < 1.0:
 			continue
 		var flow := CPUParticles3D.new()
-		flow.amount = maxi(6, int((s1 - s0) * 1.4))
-		flow.lifetime = 1.6
-		flow.position = Vector3((s0 + s1) * 0.5, 0.07, cz)  # köprü döşemesi altında kalır
+		flow.amount = maxi(10, int((s1 - s0) * 3.0))  # daha çok ama küçük damlacık
+		flow.lifetime = 1.4
+		flow.position = Vector3((s0 + s1) * 0.5, water_y + 0.04, cz)  # su yüzeyinde (çukur içinde)
 		flow.direction = Vector3(1, 0, 0)
-		flow.spread = 4.0
+		flow.spread = 6.0
 		flow.gravity = Vector3.ZERO
-		flow.initial_velocity_min = 0.8
-		flow.initial_velocity_max = 1.6
+		flow.initial_velocity_min = 0.6
+		flow.initial_velocity_max = 1.3
 		flow.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-		flow.emission_box_extents = Vector3((s1 - s0) * 0.5 - 0.2, 0.02, half * 0.7)
-		flow.scale_amount_min = 0.05
-		flow.scale_amount_max = 0.12
+		flow.emission_box_extents = Vector3((s1 - s0) * 0.5 - 0.2, 0.01, half * 0.6)
+		flow.scale_amount_min = 0.02
+		flow.scale_amount_max = 0.05  # küçük damlacık (eskiden 0.12 kocaman)
 		flow.color_ramp = framp
 		flow.mesh = QuadMesh.new()
 		flow.material_override = fm
@@ -3109,10 +3251,14 @@ func _build_cerberus_arena() -> void:
 	floor_shape.position = Vector3(w / 2.0, -0.5, w / 2.0)
 	walls_body.add_child(floor_shape)
 
+	var chan_z := w * 0.5  # su kanalı satırı: karoları atla → _build_water_features oyuk+şerit kurar
 	for x in cells:
 		for y in cells:
+			var c := _cell_center(Vector2i(x, y))
+			if absf(c.z - chan_z) <= CELL * 0.5:
+				continue
 			var tile := _spawn_piece(_pick_weighted(FLOOR_PIECES), nav)
-			tile.position = _cell_center(Vector2i(x, y))
+			tile.position = c
 
 	_perimeter_collision(walls_body, w)
 	_build_terrace_parapet(w, cells)
